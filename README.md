@@ -1,6 +1,6 @@
 # Yet Another HR
 
-YAHR is your personal HR assistant. It analyzes your resume, finds the best job for you, and helps you improve your resume to get better job opportunities.
+YAHR is a command-line tool that acts as your personal career co-pilot. It reads your resume, searches for relevant job openings, scores them against your profile, and tells you exactly how to improve your CV to maximize your chances — all from the terminal.
 
 ## Features
 
@@ -10,10 +10,12 @@ YAHR is your personal HR assistant. It analyzes your resume, finds the best job 
 
 ## Architecture
 
-- PDF Parser Agent — extracts skills, experience, education from the CV PDF
-- Job Searcher Agent — uses web search APIs (e.g. SerpAPI, Adzuna, LinkedIn scraping) to find open positions
-- Matching/Ranker Agent — scores each job against the parsed CV profile
-- Orchestrator Agent — coordinates all the above, driven by the CLI
+Built on the A2A Protocol (an open standard for agent-to-agent communication), YAHR is composed of four specialized agents that work together under a single orchestrator:
+
+Job Searcher Agent — queries web search APIs to discover open positions matching your background
+Matching/Ranker Agent — parses your CV into a structured profile and scores each job against it
+CV Assistant Agent — analyzes the gaps between your profile and the top-ranked jobs, then gives you concrete suggestions to strengthen your resume
+Orchestrator Agent — ties everything together and exposes the full workflow through an intuitive CLI interface
 
 ## Dependencies
 
