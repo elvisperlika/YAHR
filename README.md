@@ -20,12 +20,20 @@ Orchestrator Agent — ties everything together and exposes the full workflow th
 ## Getting Started
 
 YAHR requires **Python 3.14**. Set up a virtual environment and install the
-pinned dependencies:
+project. Installing it (`pip install -e .`) registers the `yahr` command so you
+can call it directly from the terminal:
 
 ```bash
 python3.14 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
+```
+
+After this, `yahr` is on your `PATH` (whenever the venv is active):
+
+```bash
+yahr --help
+yahr convert resume.pdf
 ```
 
 ### Configuration
@@ -45,22 +53,23 @@ value is saved only when its option is provided; running `setup` with no
 options prompts securely for the API key:
 
 ```bash
-python -m cli.main setup --api-key <your-openrouter-api-key>
-python -m cli.main setup --base-url https://openrouter.ai/api/v1 --model openai/gpt-4o-mini
-python -m cli.main setup        # prompts securely for the API key
+yahr setup --api-key <your-openrouter-api-key>
+yahr setup --base-url https://openrouter.ai/api/v1 --model openai/gpt-4o-mini
+yahr setup        # prompts securely for the API key
 ```
 
 ## Usage
 
-The entry point is the Typer app `python -m cli.main`. The typical workflow is
+Once installed, the entry point is the `yahr` command (equivalently
+`python -m cli.main`). The typical workflow is
 **PDF → Markdown → structured Resume JSON**:
 
 ```bash
 # 1. Convert a resume PDF to Markdown (written to output/<stem>.md)
-python -m cli.main convert path/to/cv.pdf
+yahr convert path/to/cv.pdf
 
 # 2. Parse the Markdown into a structured Resume (prints JSON; --output to save)
-python -m cli.main build-resume output/cv.md
+yahr build-resume output/cv.md
 ```
 
 ### Commands
@@ -74,7 +83,7 @@ python -m cli.main build-resume output/cv.md
 | `welcome`                       | Print a friendly greeting.                                  |
 
 Run any command with `--help` for its full options, e.g.
-`python -m cli.main build-resume --help`.
+`yahr build-resume --help`.
 
 ### Running the agent server
 
@@ -82,7 +91,7 @@ The Resume Builder is also exposed as a standalone A2A service (Starlette +
 uvicorn), serving JSON-RPC and agent-card endpoints:
 
 ```bash
-python -m cli.main serve-agent --host 127.0.0.1 --port 8001
+yahr serve-agent --host 127.0.0.1 --port 8001
 python -m agents.resume_builder.server --port 8001   # equivalent, no CLI
 ```
 
