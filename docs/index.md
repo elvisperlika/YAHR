@@ -65,15 +65,15 @@ commands).
 
 # Tech Stack
 
-| Area            | Choice                                                                 |
-| --------------- | --------------------------------------------------------------------- |
-| Language        | Python 3.14 (local `.venv/`)                                          |
-| Agent protocol  | `a2a-sdk` (the protobuf-based `a2a` package)                          |
-| LLM access      | `openai` client pointed at OpenRouter via a custom `base_url`         |
-| PDF parsing     | `markitdown` (PDF → Markdown)                                         |
-| CLI / output    | `typer` + `rich`                                                      |
-| HTTP serving    | `starlette` / `uvicorn` / `sse-starlette` (A2A endpoint)             |
-| Tooling         | `ruff`, `autoflake`, `nbqa`                                           |
+| Area           | Choice                                                        |
+| -------------- | ------------------------------------------------------------- |
+| Language       | Python 3.14 (local `.venv/`)                                  |
+| Agent protocol | `a2a-sdk` (the protobuf-based `a2a` package)                  |
+| LLM access     | `openai` client pointed at OpenRouter via a custom `base_url` |
+| PDF parsing    | `markitdown` (PDF → Markdown)                                 |
+| CLI / output   | `typer` + `rich`                                              |
+| HTTP serving   | `starlette` / `uvicorn` / `sse-starlette` (A2A endpoint)      |
+| Tooling        | `ruff`, `autoflake`, `nbqa`                                   |
 
 Runtime dependencies are pinned in `requirements.txt`.
 
@@ -127,11 +127,7 @@ The CLI itself runs locally against a Python 3.14 virtual environment.
 
 # Conclusion
 
-YAHR demonstrates how the A2A protocol enables a modular, loosely coupled
-multi-agent design for an end-to-end career-assistant workflow. The Resume
-Builder agent is implemented today; the Job Searcher, Ranker, and CV Assistant
-agents are planned and slot into the same orchestration without changing the
-established contracts.
+
 
 # Changelog
 
