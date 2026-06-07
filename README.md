@@ -40,12 +40,14 @@ MODEL=<model-id, e.g. openai/gpt-4o-mini>
 BASE_URL=https://openrouter.ai/api/v1
 ```
 
-You can save the API key to `.env` from the CLI as well (you'll be prompted
-for the key if you omit `--api-key`):
+You can write any of these settings to `.env` from the CLI with `setup`. Each
+value is saved only when its option is provided; running `setup` with no
+options prompts securely for the API key:
 
 ```bash
 python -m cli.main setup --api-key <your-openrouter-api-key>
-python -m cli.main setup        # prompts securely for the key
+python -m cli.main setup --base-url https://openrouter.ai/api/v1 --model openai/gpt-4o-mini
+python -m cli.main setup        # prompts securely for the API key
 ```
 
 ## Usage
@@ -68,7 +70,7 @@ python -m cli.main build-resume output/cv.md
 | `convert <pdf>`                 | Convert a resume PDF to Markdown at `output/<stem>.md`.     |
 | `build-resume <markdown>`       | Parse resume Markdown into a structured `Resume` (JSON).    |
 | `serve-agent [--host] [--port]` | Run the Resume Builder as an A2A HTTP server.               |
-| `setup [--api-key]` or `[-k]`   | Save the OpenRouter API key to `.env` (prompts if omitted). |
+| `setup [-k] [-b] [-m]`          | Save OpenRouter `API_KEY`/`BASE_URL`/`MODEL` to `.env`.      |
 | `welcome`                       | Print a friendly greeting.                                  |
 
 Run any command with `--help` for its full options, e.g.
