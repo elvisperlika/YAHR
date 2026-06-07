@@ -9,14 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-# OpenRouter exposes an OpenAI-compatible endpoint, so we drive it through the
-# ``openai`` SDK by pointing ``base_url`` here.
-DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-
-# A strong free model on OpenRouter (note the ``:free`` suffix). Free models are
-# rate-limited and come and go, so override with OPENROUTER_MODEL for production
-# use. See https://openrouter.ai/models?max_price=0 for what is currently routable.
-DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+from dotenv import load_dotenv
 
 
 @dataclass(frozen=True)
@@ -24,24 +17,21 @@ class OpenRouterConfig:
     """Resolved OpenRouter connection settings."""
 
     api_key: str
-    base_url: str = DEFAULT_BASE_URL
-    model: str = DEFAULT_MODEL
-    # Optional attribution headers OpenRouter shows on its dashboard/leaderboards.
-    referer: str = ""
+    base_url: str
+    model: str
     title: str = ""
-
-    @property
-    def extra_headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        if self.referer:
-            headers["HTTP-Referer"] = self.referer
-        if self.title:
-            headers["X-Title"] = self.title
-        return headers
 
 
 class MissingAPIKeyError(RuntimeError):
     """Raised when no OpenRouter API key is configured."""
+
+
+class MissingBaseURLError(RuntimeError):
+    """Raised when no OpenRouter Base URL is configured."""
+
+
+class MissingModelError(RuntimeError):
+    """Raised when no OpenRouter Model is configured."""
 
 
 def load_config() -> OpenRouterConfig:
@@ -49,26 +39,38 @@ def load_config() -> OpenRouterConfig:
 
     Recognised variables:
 
-    - ``OPENROUTER_API_KEY`` (required)
-    - ``OPENROUTER_BASE_URL`` (default: OpenRouter's v1 endpoint)
-    - ``OPENROUTER_MODEL`` (default: a free model)
-    - ``OPENROUTER_REFERER`` / ``OPENROUTER_TITLE`` (optional attribution)
+    - ``API_KEY`` (required)
+    - ``BASE_URL`` (required)
+    - ``MODEL`` (required)
 
     Raises:
-        MissingAPIKeyError: if ``OPENROUTER_API_KEY`` is not set.
+        MissingAPIKeyError: if ``API_KEY`` is not set.
     """
-    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+
+    # Load .env into the environment; real env vars take precedence (override=False).
+    load_dotenv(override=False)
+
+    api_key = os.getenv("API_KEY", "").strip()
+    base_url = os.getenv("BASE_URL", "").strip()
+    model = os.getenv("MODEL", "").strip()
+
     if not api_key:
         raise MissingAPIKeyError(
-            "OPENROUTER_API_KEY is not set. Get a key at "
+            "API_KEY is not set. Get a key at "
             "https://openrouter.ai/keys and export it before running the agent."
         )
+    if not base_url:
+        raise MissingBaseURLError(
+            "BASE_URL is not set (e.g. https://openrouter.ai/api/v1)."
+        )
+    if not model:
+        raise MissingModelError(
+            "MODEL is not set. Set it to the name of the model you want to use, e.g. gpt-4o-mini."
+        )
+
     return OpenRouterConfig(
         api_key=api_key,
-        base_url=os.environ.get("OPENROUTER_BASE_URL", DEFAULT_BASE_URL).strip()
-        or DEFAULT_BASE_URL,
-        model=os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL).strip()
-        or DEFAULT_MODEL,
-        referer=os.environ.get("OPENROUTER_REFERER", "").strip(),
-        title=os.environ.get("OPENROUTER_TITLE", "YAHR Resume Builder").strip(),
+        base_url=base_url,
+        model=model,
+        title="YAHR Resume Builder",
     )
