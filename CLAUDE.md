@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-YAHR (Yet Another HR) is a personal HR assistant CLI that parses a resume PDF, searches for matching jobs, and suggests resume improvements. It is in early development — `agents/`, `cli/`, and `a2a/` are currently empty scaffolding.
+YAHR (Yet Another HR) is a personal HR assistant CLI that parses a resume PDF, searches for matching jobs, and suggests resume improvements.
 
 ## Environment
 
@@ -73,14 +73,14 @@ Agents coordinated by an orchestrator, all driven from a CLI entry point:
 
 ## Key dependencies
 
-| Package | Role |
-|---|---|
-| `a2a-sdk` | A2A protocol types + server (`a2a` package, protobuf-based) |
-| `markitdown` | PDF → Markdown conversion for CV parsing |
-| `openai` | LLM calls — used as the OpenRouter client via a custom `base_url` |
-| `typer` | CLI framework |
-| `rich` | Terminal output formatting |
-| `starlette` / `uvicorn` / `sse-starlette` | ASGI server for the A2A HTTP endpoint |
-| `ruff` / `autoflake` | Linting and import cleanup |
+| Package                                   | Role                                                              |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `a2a-sdk`                                 | A2A protocol types + server (`a2a` package, protobuf-based)       |
+| `markitdown`                              | PDF → Markdown conversion for CV parsing                          |
+| `openai`                                  | LLM calls — used as the OpenRouter client via a custom `base_url` |
+| `typer`                                   | CLI framework                                                     |
+| `rich`                                    | Terminal output formatting                                        |
+| `starlette` / `uvicorn` / `sse-starlette` | ASGI server for the A2A HTTP endpoint                             |
+| `ruff` / `autoflake`                      | Linting and import cleanup                                        |
 
 Runtime deps are pinned in `requirements.txt` (`pip install -r requirements.txt`).
