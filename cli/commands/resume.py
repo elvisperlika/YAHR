@@ -4,7 +4,7 @@ from pathlib import Path
 
 import typer
 
-from agents.resume_builder.config import MissingAPIKeyError
+from agents.resume_builder.config import ConfigError
 from agents.resume_builder.core import (
     ResumeParseError,
     build_resume_from_markdown_sync,
@@ -36,7 +36,7 @@ def build_resume(
             "[bold cyan]Building resume…[/bold cyan]", spinner="dots"
         ):
             resume = build_resume_from_markdown_sync(text)
-    except MissingAPIKeyError as e:
+    except ConfigError as e:
         err_console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)
     except ResumeParseError as e:

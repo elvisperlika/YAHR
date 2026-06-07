@@ -1,7 +1,6 @@
 import typer
 from pathlib import Path
 from markitdown import MarkItDown, FileConversionException, UnsupportedFormatException
-from rich.console import Console
 
 from cli.app import app, console, err_console
 

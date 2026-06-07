@@ -51,8 +51,8 @@ Agents coordinated by an orchestrator, all driven from a CLI entry point:
   markdown into a structured `Resume` via an OpenRouter-hosted LLM.
   - `core.py` — transport-agnostic logic: markdown → `Resume` (the
     `build_resume_from_markdown` coroutine + JSON parsing into the dataclasses).
-  - `config.py` — OpenRouter settings from env (`OPENROUTER_API_KEY` required;
-    `OPENROUTER_MODEL` defaults to a free model; `OPENROUTER_BASE_URL`).
+  - `config.py` — OpenRouter settings from env (`API_KEY` required;
+    `MODEL` required; `BASE_URL` required;).
   - `executor.py` — `ResumeBuilderExecutor`, the A2A `AgentExecutor`; emits the
     `Resume` as a JSON data artifact named `resume`.
   - `agent_card.py` — the public `AgentCard` (skill `build_resume`).

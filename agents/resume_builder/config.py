@@ -21,30 +21,41 @@ class OpenRouterConfig:
     model: str
     title: str = ""
 
+    @property
+    def extra_headers(self) -> dict[str, str]:
+        """Optional headers OpenRouter uses for attribution (e.g. ``X-Title``)."""
+        return {"X-Title": self.title} if self.title else {}
 
-class MissingAPIKeyError(RuntimeError):
+
+class ConfigError(RuntimeError):
+    """Base class for missing/invalid configuration."""
+
+
+class MissingAPIKeyError(ConfigError):
     """Raised when no OpenRouter API key is configured."""
 
 
-class MissingBaseURLError(RuntimeError):
+class MissingBaseURLError(ConfigError):
     """Raised when no OpenRouter Base URL is configured."""
 
 
-class MissingModelError(RuntimeError):
+class MissingModelError(ConfigError):
     """Raised when no OpenRouter Model is configured."""
 
 
 def load_config() -> OpenRouterConfig:
     """Build an :class:`OpenRouterConfig` from environment variables.
 
-    Recognised variables:
+    All of the following are required (no defaults):
 
-    - ``API_KEY`` (required)
-    - ``BASE_URL`` (required)
-    - ``MODEL`` (required)
+    - ``API_KEY``
+    - ``BASE_URL``
+    - ``MODEL``
 
     Raises:
         MissingAPIKeyError: if ``API_KEY`` is not set.
+        MissingBaseURLError: if ``BASE_URL`` is not set.
+        MissingModelError: if ``MODEL`` is not set.
     """
 
     # Load .env into the environment; real env vars take precedence (override=False).
