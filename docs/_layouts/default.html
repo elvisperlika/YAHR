@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title | default: site.title }}</title>
+  <meta name="description" content="{{ page.description | default: site.description }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #060912;
+      --bg-soft: #0b1020;
+      --panel: rgba(18, 24, 43, 0.66);
+      --border: rgba(116, 138, 196, 0.16);
+      --text: #e6ebff;
+      --muted: #9aa6c7;
+      --accent: #38e1ff;
+      --accent-2: #7c5cff;
+      --accent-3: #36f6b0;
+      --glow: 0 0 0 1px rgba(56, 225, 255, 0.18), 0 18px 60px -24px rgba(56, 225, 255, 0.45);
+      --radius: 16px;
+      --maxw: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 90px; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ---- animated tech background ---- */
+    .bg-fx {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background:
+        radial-gradient(900px 500px at 12% -8%, rgba(124, 92, 255, 0.22), transparent 60%),
+        radial-gradient(800px 520px at 95% 0%, rgba(56, 225, 255, 0.18), transparent 55%),
+        radial-gradient(900px 700px at 50% 120%, rgba(54, 246, 176, 0.10), transparent 60%),
+        var(--bg);
+    }
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        linear-gradient(rgba(116, 138, 196, 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(116, 138, 196, 0.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 40%, transparent 100%);
+      animation: drift 24s linear infinite;
+    }
+    @keyframes drift {
+      from { background-position: 0 0, 0 0; }
+      to   { background-position: 48px 48px, 48px 48px; }
+    }
+
+    /* ---- scroll progress ---- */
+    #progress {
+      position: fixed;
+      top: 0; left: 0;
+      height: 2px; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+      z-index: 100;
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    /* ---- top nav ---- */
+    header.nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(14px);
+      background: rgba(6, 9, 18, 0.72);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      font-size: 1.05rem;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .brand .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent-3);
+      box-shadow: 0 0 12px var(--accent-3);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+    .nav-spacer { flex: 1; }
+    .nav-tag {
+      font-family: "JetBrains Mono", monospace;
+      font-size: .72rem;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(56, 225, 255, 0.06);
+    }
+    .ghlink {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: .85rem;
+      font-weight: 500;
+      transition: color .2s;
+    }
+    .ghlink:hover { color: var(--accent); }
+
+    /* ---- layout shell ---- */
+    .shell {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 0 28px 100px;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 48px;
+    }
+
+    /* ---- sidebar TOC ---- */
+    aside.toc {
+      position: sticky;
+      top: 86px;
+      align-self: start;
+      max-height: calc(100vh - 110px);
+      overflow-y: auto;
+      padding: 24px 0;
+    }
+    .toc-title {
+      font-family: "JetBrains Mono", monospace;
+      font-size: .7rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .toc a {
+      display: block;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: .88rem;
+      padding: 6px 0 6px 14px;
+      border-left: 2px solid var(--border);
+      transition: all .18s;
+    }
+    .toc a:hover { color: var(--text); border-left-color: var(--accent-2); }
+    .toc a.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      transform: translateX(2px);
+    }
+
+    /* ---- content ---- */
+    main {
+      padding: 40px 0;
+      min-width: 0;
+    }
+    .content > * { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes rise { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+
+    .content h1 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      line-height: 1.05;
+      font-weight: 700;
+      margin: .2em 0 .4em;
+      background: linear-gradient(120deg, #ffffff 10%, var(--accent) 55%, var(--accent-2) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.02em;
+    }
+    .content h1 + p { color: var(--muted); }
+
+    .content h1:not(:first-of-type),
+    .content h2 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.7rem;
+      font-weight: 600;
+      margin: 2.4em 0 .8em;
+      padding-top: .6em;
+      position: relative;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .content h1:not(:first-of-type)::before,
+    .content h2::before {
+      content: "";
+      position: absolute;
+      left: -22px; top: 1.15em;
+      width: 12px; height: 2px;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .content h3 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.25rem;
+      margin: 1.8em 0 .6em;
+      color: var(--text);
+    }
+
+    .content p { color: #cdd5ee; margin: 1em 0; }
+    .content a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(56,225,255,.3); }
+    .content a:hover { border-bottom-color: var(--accent); }
+
+    .content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--panel);
+      padding: 8px;
+      display: block;
+      margin: 1.4em auto;
+      box-shadow: var(--glow);
+    }
+    /* logo: keep it compact and centered */
+    .content h1:first-child + p img,
+    .content > p:first-of-type img,
+    img[src*="logo"] {
+      max-width: 260px;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      filter: drop-shadow(0 12px 40px rgba(56,225,255,.25));
+    }
+
+    .content code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: .86em;
+      background: rgba(124, 92, 255, 0.12);
+      border: 1px solid var(--border);
+      padding: .12em .45em;
+      border-radius: 6px;
+      color: #d7c8ff;
+    }
+    .content pre {
+      background: #0a0e1c;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      overflow-x: auto;
+      box-shadow: inset 0 0 60px -30px var(--accent-2);
+    }
+    .content pre code { background: none; border: none; padding: 0; color: #cfe3ff; }
+
+    .content blockquote {
+      margin: 1.4em 0;
+      padding: 14px 20px;
+      border-left: 3px solid var(--accent-2);
+      background: rgba(124, 92, 255, 0.08);
+      border-radius: 0 12px 12px 0;
+      color: var(--muted);
+    }
+    .content ul, .content ol { color: #cdd5ee; padding-left: 1.3em; }
+    .content li { margin: .4em 0; }
+    .content li::marker { color: var(--accent); }
+
+    .content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.4em 0;
+      font-size: .92rem;
+    }
+    .content th, .content td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    .content th { background: rgba(124, 92, 255, 0.10); color: var(--text); }
+    .content hr { border: none; border-top: 1px solid var(--border); margin: 2.4em 0; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 30px 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: .82rem;
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(124,92,255,.3); border-radius: 999px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; gap: 0; }
+      aside.toc { display: none; }
+      .content h1:not(:first-of-type)::before, .content h2::before { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-fx"></div>
+  <div class="bg-grid"></div>
+  <div id="progress"></div>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="{{ '/' | relative_url }}">
+        <span class="dot"></span>YAHR
+      </a>
+      <span class="nav-tag">A2A · multi-agent</span>
+      <span class="nav-spacer"></span>
+      <a class="ghlink" href="https://github.com/elvisperlika/YAHR" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="toc">
+      <div class="toc-title">// contents</div>
+      <nav id="toc-nav"></nav>
+    </aside>
+
+    <main>
+      <div class="content">
+        {{ content }}
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    {{ site.title }} — built with the A2A protocol · &copy; <span id="yr"></span> Elvis Perlika
+  </footer>
+
+  <script>
+    // scroll progress
+    const prog = document.getElementById('progress');
+    const onScroll = () => {
+      const h = document.documentElement;
+      const p = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+      prog.style.width = p + '%';
+    };
+    document.addEventListener('scroll', onScroll, { passive: true });
+
+    // build TOC from headings, scoped active highlight
+    const content = document.querySelector('.content');
+    const heads = [...content.querySelectorAll('h1, h2')];
+    const nav = document.getElementById('toc-nav');
+    const links = [];
+    heads.forEach((h, i) => {
+      if (!h.id) h.id = 'sec-' + i + '-' + h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const a = document.createElement('a');
+      a.href = '#' + h.id;
+      a.textContent = h.textContent;
+      nav.appendChild(a);
+      links.push(a);
+    });
+
+    const spy = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const id = e.target.id;
+          links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + id));
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    heads.forEach(h => spy.observe(h));
+
+    document.getElementById('yr').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
