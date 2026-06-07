@@ -29,14 +29,114 @@ enables a modular, loosely coupled multi-agent design.
 
 ![C4-Index](image/c4-index.png)
 
+The diagram above is the *System Context*: a single **Job Seeker** interacts
+with **YAHR** from the terminal, while YAHR depends on two external systems —
+**OpenRouter** (an OpenAI-compatible LLM gateway) for all language-model
+reasoning, and the external **Job Board / Web Search APIs** that supply open
+positions.
+
 # Design
+
+Internally YAHR is a multi-agent system built on the **A2A (Agent-to-Agent)
+protocol**. A thin **CLI** (the user's entry point) hands work to an
+**Orchestrator Agent**, which coordinates four specialized agents in sequence:
+
+- **Resume Builder Agent** — converts resume Markdown into a structured
+  `Resume` object via an OpenRouter-hosted LLM. *(implemented)*
+- **Job Searcher Agent** — queries the external job/search APIs for openings
+  that match the candidate's background. *(planned)*
+- **Ranker Agent** — scores each open position against the structured profile.
+  *(planned)*
+- **CV Assistant Agent** — analyzes the gaps between the profile and the
+  top-ranked jobs and proposes concrete resume improvements. *(planned)*
+
+Each agent is a self-contained A2A service exposing its own *agent card* and
+skills, which keeps the design modular and loosely coupled: agents can be
+developed, deployed, and replaced independently, and the orchestrator depends
+only on their public A2A contracts rather than their internals.
+
+The end-to-end data flow is: **PDF → Markdown** (via `markitdown`) **→
+structured `Resume`** (Resume Builder + LLM) **→ matching jobs** (Job Searcher)
+**→ ranked shortlist** (Ranker) **→ improvement suggestions** (CV Assistant).
+
+The container-level view of the agents and their dependencies is maintained in
+`docs/c4/YAHR.c4` (System Context + Containers) and `docs/c4/CLI.c4` (the CLI
+commands).
 
 # Tech Stack
 
+| Area            | Choice                                                                 |
+| --------------- | --------------------------------------------------------------------- |
+| Language        | Python 3.14 (local `.venv/`)                                          |
+| Agent protocol  | `a2a-sdk` (the protobuf-based `a2a` package)                          |
+| LLM access      | `openai` client pointed at OpenRouter via a custom `base_url`         |
+| PDF parsing     | `markitdown` (PDF → Markdown)                                         |
+| CLI / output    | `typer` + `rich`                                                      |
+| HTTP serving    | `starlette` / `uvicorn` / `sse-starlette` (A2A endpoint)             |
+| Tooling         | `ruff`, `autoflake`, `nbqa`                                           |
+
+Runtime dependencies are pinned in `requirements.txt`.
+
 # Code
+
+The repository is organized around agents and a CLI:
+
+- `agents/resume_builder/` — the implemented A2A agent:
+  - `core.py` — transport-agnostic logic (Markdown → `Resume`).
+  - `config.py` — OpenRouter settings from the environment
+    (`API_KEY`, `MODEL`, `BASE_URL`).
+  - `executor.py` — the A2A `AgentExecutor`; emits the `Resume` as a JSON
+    data artifact named `resume`.
+  - `agent_card.py` — the public `AgentCard` (skill `build_resume`).
+  - `server.py` — assembles the JSON-RPC / agent-card routes into a Starlette
+    app served with uvicorn.
+- `cli/` — the Typer + Rich CLI; commands live in `cli/commands/` and
+  self-register from `cli.app`. Entry point: `python -m cli.main`.
+- `agents/job_searcher.py`, `agents/ranker.py`, `agents/orchestrator.py` —
+  planned agents.
+
+Key CLI commands:
+
+```bash
+python -m cli.main convert path/to/cv.pdf        # PDF -> output/<stem>.md
+python -m cli.main build-resume output/resume.md # Markdown -> structured Resume JSON
+python -m cli.main serve-agent --port 8001       # run the Resume Builder as an A2A server
+```
 
 # Testing
 
+Tests live in `tests/` and run standalone (a tiny built-in runner stands in
+for `pytest`, so no extra dependency is required) or under `pytest` if it is
+installed:
+
+```bash
+PYTHONPATH=. python tests/test_resume_builder.py
+```
+
 # Deployment
 
+The Resume Builder agent is deployed as an A2A HTTP service (Starlette served
+by uvicorn), exposing JSON-RPC and agent-card endpoints:
+
+```bash
+python -m cli.main serve-agent --host 127.0.0.1 --port 8001
+python -m agents.resume_builder.server --port 8001   # equivalent, no CLI
+```
+
+The CLI itself runs locally against a Python 3.14 virtual environment.
+
 # Conclusion
+
+YAHR demonstrates how the A2A protocol enables a modular, loosely coupled
+multi-agent design for an end-to-end career-assistant workflow. The Resume
+Builder agent is implemented today; the Job Searcher, Ranker, and CV Assistant
+agents are planned and slot into the same orchestration without changing the
+established contracts.
+
+# Changelog
+
+- **2026-06-07** — Documented the multi-agent architecture: expanded the C4
+  model with a *Containers* view of the four agents (`docs/c4/YAHR.c4`) and
+  filled in the Design, Tech Stack, Code, Testing, and Deployment sections of
+  this report to match the codebase. Clarified which agents are implemented
+  (Resume Builder) versus planned.

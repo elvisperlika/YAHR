@@ -19,7 +19,7 @@ specification {
 model {
   extend yahr {
     cli = container 'YAHR CLI' {
-      description 'Typer + Rich command-line app. `python -m cli.main` is the entry point; commands self-register by importing the shared Typer `app` from cli.app.'
+      description 'CLI app.'
       technology 'Python · Typer · Rich'
 
       convertCmd = command 'convert' {
