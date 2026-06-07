@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 from agents.resume_builder.config import OpenRouterConfig, load_config
 from models import (
@@ -217,8 +217,9 @@ async def _complete(
         resp = await client.chat.completions.create(
             response_format={"type": "json_object"}, **kwargs
         )
-    except Exception:
-        # Many free models reject response_format; retry without it.
+    except BadRequestError:
+        # Many free models reject the json_object response_format; retry without
+        # it. Other errors (auth, network, rate limits) propagate unchanged.
         resp = await client.chat.completions.create(**kwargs)
 
     if not resp.choices:

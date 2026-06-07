@@ -209,3 +209,7 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/macos,python
 
 resume.pdf
+
+# Local configuration files
+.husky/_/
+node_modules/

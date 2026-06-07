@@ -5,4 +5,4 @@ app = typer.Typer(add_completion=False)
 console = Console()
 err_console = Console(stderr=True)
 
-from cli.commands import convert, resume, welcome  # noqa: E402, F401
+from cli.commands import convert, resume, setup, welcome  # noqa: E402, F401

@@ -1,5 +1,9 @@
-// YAHR (Yet Another HR) — C4 System Context diagram (LikeC4 DSL).
+// YAHR (Yet Another HR) — C4 model (LikeC4 DSL).
 // See https://likec4.dev for syntax / tooling.
+//
+// This file owns the System Context and the agent containers of YAHR.
+// The `cli` container (and the `container` element kind) is defined in
+// CLI.c4, which shares this workspace's model — reused here, not redefined.
 
 specification {
   element person {
@@ -8,6 +12,12 @@ specification {
     }
   }
   element system
+  element agent {
+    style {
+      shape rectangle
+      color green
+    }
+  }
   element externalSystem {
     style {
       color secondary
@@ -22,24 +32,72 @@ model {
 
   yahr = system 'YAHR' {
     description 'Personal HR assistant CLI: parses a resume PDF, searches for matching jobs, and suggests resume improvements.'
+
+    // The `cli` container is defined in CLI.c4 (extend yahr). The four A2A
+    // agents that the CLI orchestrates are defined here.
+
+    orchestrator = agent 'Orchestrator Agent' {
+      description 'Ties everything together and drives the full workflow, coordinating the specialized agents in sequence over A2A. (planned)'
+      technology 'A2A'
+    }
+
+    resumeBuilder = agent 'Resume Builder Agent' {
+      description 'Turns resume Markdown into a structured Resume via an OpenRouter-hosted LLM. The only agent currently implemented.'
+      technology 'A2A, OpenAI client, Starlette/uvicorn'
+    }
+
+    jobSearcher = agent 'Job Searcher Agent' {
+      description 'Queries web search / job board APIs to discover open positions matching the candidate background. (planned)'
+      technology 'A2A'
+    }
+
+    ranker = agent 'Matching / Ranker Agent' {
+      description 'Scores each open position against the structured profile produced by the Resume Builder. (planned)'
+      technology 'A2A, LLM'
+    }
+
+    cvAssistant = agent 'CV Assistant Agent' {
+      description 'Analyzes gaps between the profile and the top-ranked jobs and gives concrete suggestions to strengthen the resume. (planned)'
+      technology 'A2A, LLM'
+    }
   }
 
   openrouter = externalSystem 'OpenRouter' {
-    description 'LLM gateway (OpenAI-compatible API) used to extract a structured Resume from resume markdown.'
+    description 'LLM gateway (OpenAI-compatible API) used to extract a structured Resume and to reason about jobs and improvements.'
   }
 
-  jobApis = externalSystem 'Job Board APIs' {
+  jobApis = externalSystem 'Job Board / Web Search APIs' {
     description 'External job listing providers queried for open positions matching the candidate profile.'
   }
 
+  // System Context relationships
   user -> yahr 'Parses resume & searches jobs using'
-  yahr -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
+  yahr -> openrouter 'Reasons over resume & jobs via LLM (HTTPS / JSON)'
   yahr -> jobApis 'Fetches open job listings from (HTTPS)'
+
+  // Container relationships (cli is defined in CLI.c4)
+  yahr.cli -> orchestrator 'Starts the workflow (A2A)'
+
+  orchestrator -> jobSearcher 'Requests matching jobs (A2A)'
+  orchestrator -> ranker 'Requests profile parsing & job scoring (A2A)'
+  orchestrator -> cvAssistant 'Requests improvement suggestions (A2A)'
+
+  jobSearcher -> jobApis 'Searches for open positions (HTTPS)'
+  ranker -> openrouter 'Extracts structured Resume & scores jobs (HTTPS / JSON)'
+  cvAssistant -> openrouter 'Generates resume suggestions (HTTPS / JSON)'
 }
 
 views {
   view index {
     title 'YAHR — System Context'
+
+    include user, yahr, openrouter, jobApis
+
+    autoLayout TopBottom
+  }
+
+  view containers of yahr {
+    title 'YAHR — Containers'
 
     include *
 

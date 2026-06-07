@@ -1,5 +1,3 @@
-import typer
-from rich.console import Console
 from cli.app import app, console
 
 

@@ -86,7 +86,9 @@ class _FakeClient:
 
 def test_build_resume_from_markdown_with_fake_client():
     client = _FakeClient(json.dumps(SAMPLE_JSON))
-    config = OpenRouterConfig(api_key="test", model="test/model")
+    config = OpenRouterConfig(
+        api_key="test", base_url="http://test", model="test/model"
+    )
     resume = asyncio.run(
         build_resume_from_markdown("# resume", config=config, client=client)
     )

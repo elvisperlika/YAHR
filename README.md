@@ -17,6 +17,75 @@ Matching/Ranker Agent — parses your CV into a structured profile and scores ea
 CV Assistant Agent — analyzes the gaps between your profile and the top-ranked jobs, then gives you concrete suggestions to strengthen your resume
 Orchestrator Agent — ties everything together and exposes the full workflow through an intuitive CLI interface
 
+## Getting Started
+
+YAHR requires **Python 3.14**. Set up a virtual environment and install the
+pinned dependencies:
+
+```bash
+python3.14 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Configuration
+
+The Resume Builder agent reasons through an OpenRouter-hosted LLM (an
+OpenAI-compatible gateway). Provide the following environment variables, e.g.
+in a `.env` file at the repository root:
+
+```bash
+API_KEY=<your-openrouter-api-key>
+MODEL=<model-id, e.g. openai/gpt-4o-mini>
+BASE_URL=https://openrouter.ai/api/v1
+```
+
+You can write any of these settings to `.env` from the CLI with `setup`. Each
+value is saved only when its option is provided; running `setup` with no
+options prompts securely for the API key:
+
+```bash
+python -m cli.main setup --api-key <your-openrouter-api-key>
+python -m cli.main setup --base-url https://openrouter.ai/api/v1 --model openai/gpt-4o-mini
+python -m cli.main setup        # prompts securely for the API key
+```
+
+## Usage
+
+The entry point is the Typer app `python -m cli.main`. The typical workflow is
+**PDF → Markdown → structured Resume JSON**:
+
+```bash
+# 1. Convert a resume PDF to Markdown (written to output/<stem>.md)
+python -m cli.main convert path/to/cv.pdf
+
+# 2. Parse the Markdown into a structured Resume (prints JSON; --output to save)
+python -m cli.main build-resume output/cv.md
+```
+
+### Commands
+
+| Command                         | Description                                                 |
+| ------------------------------- | ----------------------------------------------------------- |
+| `convert <pdf>`                 | Convert a resume PDF to Markdown at `output/<stem>.md`.     |
+| `build-resume <markdown>`       | Parse resume Markdown into a structured `Resume` (JSON).    |
+| `serve-agent [--host] [--port]` | Run the Resume Builder as an A2A HTTP server.               |
+| `setup [-k] [-b] [-m]`          | Save OpenRouter `API_KEY`/`BASE_URL`/`MODEL` to `.env`.      |
+| `welcome`                       | Print a friendly greeting.                                  |
+
+Run any command with `--help` for its full options, e.g.
+`python -m cli.main build-resume --help`.
+
+### Running the agent server
+
+The Resume Builder is also exposed as a standalone A2A service (Starlette +
+uvicorn), serving JSON-RPC and agent-card endpoints:
+
+```bash
+python -m cli.main serve-agent --host 127.0.0.1 --port 8001
+python -m agents.resume_builder.server --port 8001   # equivalent, no CLI
+```
+
 ## Dependencies
 
 - MarkItDown

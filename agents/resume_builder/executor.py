@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
-from pathlib import Path
 
 from a2a.helpers.proto_helpers import (
     get_data_parts,
@@ -18,7 +17,7 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState
 
-from agents.resume_builder.config import MissingAPIKeyError, OpenRouterConfig
+from agents.resume_builder.config import ConfigError, OpenRouterConfig
 from agents.resume_builder.core import (
     ResumeParseError,
     build_resume_from_markdown,
@@ -26,37 +25,28 @@ from agents.resume_builder.core import (
 
 logger = logging.getLogger(__name__)
 
-# Guard against accidentally treating a whole resume as a filename.
-_MAX_PATH_LEN = 4096
-
 
 def _resolve_markdown(context: RequestContext) -> str:
     """Work out the resume markdown to parse from the incoming message.
 
     Accepts, in priority order:
 
-    1. A data part with ``{"markdown": "..."}`` or ``{"path": "..."}``.
-    2. A text part that is a path to an existing file (its contents are read).
-    3. A text part containing the markdown itself.
+    1. A data part with ``{"markdown": "..."}``.
+    2. A text part containing the markdown itself.
+
+    The markdown must be supplied inline. Filesystem paths are intentionally
+    not honoured here: this executor can be exposed over the network, and
+    reading arbitrary server-side files from a request would be an LFI hole.
     """
     message = context.message
-    if message is not None:
-        for data in get_data_parts(message.parts):
-            if isinstance(data, dict):
-                if data.get("markdown"):
-                    return str(data["markdown"])
-                if data.get("path"):
-                    return Path(str(data["path"])).read_text(encoding="utf-8")
+    if message is None:
+        return ""
 
-        text = "\n".join(get_text_parts(message.parts)).strip()
-    else:
-        text = ""
+    for data in get_data_parts(message.parts):
+        if isinstance(data, dict) and data.get("markdown"):
+            return str(data["markdown"])
 
-    if text and len(text) <= _MAX_PATH_LEN and "\n" not in text:
-        candidate = Path(text)
-        if candidate.is_file():
-            return candidate.read_text(encoding="utf-8")
-    return text
+    return "\n".join(get_text_parts(message.parts)).strip()
 
 
 class ResumeBuilderExecutor(AgentExecutor):
@@ -76,25 +66,20 @@ class ResumeBuilderExecutor(AgentExecutor):
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
         await updater.start_work()
 
-        try:
-            markdown = _resolve_markdown(context)
-        except OSError as exc:
-            await updater.failed(
-                updater.new_agent_message(
-                    [new_text_part(f"Could not read resume input: {exc}")]
-                )
-            )
-            return
+        markdown = _resolve_markdown(context)
 
         try:
             resume = await build_resume_from_markdown(markdown, config=self._config)
-        except (MissingAPIKeyError, ResumeParseError) as exc:
+        except (ConfigError, ResumeParseError) as exc:
             logger.warning("Resume build failed: %s", exc)
             await updater.failed(updater.new_agent_message([new_text_part(str(exc))]))
             return
 
+        # raw_text just echoes the input; don't ship it back in the artifact.
+        data = asdict(resume)
+        data.pop("raw_text", None)
         await updater.add_artifact(
-            [new_data_part(asdict(resume), media_type="application/json")],
+            [new_data_part(data, media_type="application/json")],
             name="resume",
         )
 
