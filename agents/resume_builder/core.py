@@ -107,10 +107,12 @@ def _extract_json_object(text: str) -> dict:
 
 
 def _as_str(value: object) -> str:
+    """Safely convert a value to a stripped string, or return an empty string."""
     return value.strip() if isinstance(value, str) else ""
 
 
 def _as_str_list(value: object) -> list[str]:
+    """Safely convert a value to a list of stripped strings, or return an empty list."""
     if isinstance(value, list):
         return [v.strip() for v in value if isinstance(v, str) and v.strip()]
     return []

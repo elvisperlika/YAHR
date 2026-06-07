@@ -1,0 +1,48 @@
+// YAHR (Yet Another HR) — C4 System Context diagram (LikeC4 DSL).
+// See https://likec4.dev for syntax / tooling.
+
+specification {
+  element person {
+    style {
+      shape person
+    }
+  }
+  element system
+  element externalSystem {
+    style {
+      color secondary
+    }
+  }
+}
+
+model {
+  user = person 'Job Seeker' {
+    description 'Runs the CLI to parse a resume, find matching jobs, and get improvement suggestions.'
+  }
+
+  yahr = system 'YAHR' {
+    description 'Personal HR assistant CLI: parses a resume PDF, searches for matching jobs, and suggests resume improvements.'
+  }
+
+  openrouter = externalSystem 'OpenRouter' {
+    description 'LLM gateway (OpenAI-compatible API) used to extract a structured Resume from resume markdown.'
+  }
+
+  jobApis = externalSystem 'Job Board APIs' {
+    description 'External job listing providers queried for open positions matching the candidate profile.'
+  }
+
+  user -> yahr 'Parses resume & searches jobs using'
+  yahr -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
+  yahr -> jobApis 'Fetches open job listings from (HTTPS)'
+}
+
+views {
+  view index {
+    title 'YAHR — System Context'
+
+    include *
+
+    autoLayout TopBottom
+  }
+}

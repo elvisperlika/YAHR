@@ -1,0 +1,60 @@
+// YAHR — CLI interface (C4 Container/Component view, LikeC4 DSL).
+// Extends the model defined in YAHR.c4 (shared workspace): reuses `yahr`,
+// `user`, and `openrouter` rather than redefining them.
+
+specification {
+  element container {
+    style {
+      shape rectangle
+    }
+  }
+  element command {
+    style {
+      shape rectangle
+      color muted
+    }
+  }
+}
+
+model {
+  extend yahr {
+    cli = container 'YAHR CLI' {
+      description 'Typer + Rich command-line app. `python -m cli.main` is the entry point; commands self-register by importing the shared Typer `app` from cli.app.'
+      technology 'Python · Typer · Rich'
+
+      convertCmd = command 'convert' {
+        description 'Converts a PDF resume to Markdown, written to output/<stem>.md.'
+        technology 'markitdown'
+      }
+      buildResumeCmd = command 'build-resume' {
+        description 'Parses resume Markdown into a structured Resume; prints the JSON or saves it with --output. Shows a live status spinner while the LLM runs.'
+      }
+      serveAgentCmd = command 'serve-agent' {
+        description 'Runs the Resume Builder agent as an A2A HTTP server (--host/--port).'
+      }
+      welcomeCmd = command 'welcome' {
+        description 'Prints a friendly greeting.'
+      }
+    }
+  }
+
+  // How the user reaches each command from the terminal.
+  user -> cli.convertCmd 'cli.main convert cv.pdf'
+  user -> cli.buildResumeCmd 'cli.main build-resume resume.md'
+  user -> cli.serveAgentCmd 'cli.main serve-agent'
+  user -> cli.welcomeCmd 'cli.main welcome'
+
+  // Outbound dependencies of the individual commands.
+  cli.buildResumeCmd -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
+  cli.serveAgentCmd -> openrouter 'Serves an agent that extracts Resumes via LLM'
+}
+
+views {
+  view cliInterface of cli {
+    title 'YAHR CLI — Commands'
+
+    include *
+
+    autoLayout TopBottom
+  }
+}

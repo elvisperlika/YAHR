@@ -32,7 +32,10 @@ def build_resume(
 
     text = markdown.read_text(encoding="utf-8")
     try:
-        resume = build_resume_from_markdown_sync(text)
+        with console.status(
+            "[bold cyan]Building resume…[/bold cyan]", spinner="dots"
+        ):
+            resume = build_resume_from_markdown_sync(text)
     except MissingAPIKeyError as e:
         err_console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(code=1)

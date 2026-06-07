@@ -14,8 +14,9 @@ from dataclasses import dataclass
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 # A strong free model on OpenRouter (note the ``:free`` suffix). Free models are
-# rate-limited; override with OPENROUTER_MODEL for production use.
-DEFAULT_MODEL = "deepseek/deepseek-chat-v3-0324:free"
+# rate-limited and come and go, so override with OPENROUTER_MODEL for production
+# use. See https://openrouter.ai/models?max_price=0 for what is currently routable.
+DEFAULT_MODEL = "google/gemma-4-31b-it:free"
 
 
 @dataclass(frozen=True)
