@@ -1,0 +1,24 @@
+title: YAHR
+description: Yet Another HR — a command-line career co-pilot built on the A2A protocol.
+
+# Use our own layout instead of a packaged theme.
+theme: null
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+
+# Apply the custom layout to every page automatically, even those
+# (like index.md) that have no YAML front matter.
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+exclude:
+  - c4/*.c4

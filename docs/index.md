@@ -27,8 +27,6 @@ enables a modular, loosely coupled multi-agent design.
 
 # Domain
 
-![C4-Index](image/c4-index.png)
-
 The diagram above is the *System Context*: a single **Job Seeker** interacts
 with **YAHR** from the terminal, while YAHR depends on two external systems —
 **OpenRouter** (an OpenAI-compatible LLM gateway) for all language-model
@@ -63,17 +61,49 @@ The container-level view of the agents and their dependencies is maintained in
 `docs/c4/YAHR.c4` (System Context + Containers) and `docs/c4/CLI.c4` (the CLI
 commands).
 
+## System Context Diagram
+
+![C4-System-Context](image/c4-system-context.png)
+
+## Container Diagram
+
+![C4-Containers](image/c4-containers.png)
+
+## Component Diagram
+
+### CLI Architecture
+
+![C4-CLI](image/c4-cli.png)
+
+The CLI is
+organized as a thin core that owns the shared application object and output
+streams, surrounded by a set of independent commands that each register
+themselves on that core when loaded. Adding a command is therefore purely
+additive — no central dispatch table to edit — which keeps the surface modular
+and easy to extend.
+
+Functionally the commands fall into two groups. *Local* commands handle the
+work that needs no model: converting a PDF resume to Markdown, configuring
+OpenRouter credentials, and basic UX. *Agent-backed* commands bridge the CLI to
+the multi-agent system — turning resume Markdown into a structured `Resume`, and
+serving the Resume Builder as an A2A endpoint — and are the only ones that reach
+out to OpenRouter for LLM reasoning. This mirrors the system at large: the CLI
+stays a lightweight front end, delegating the heavyweight reasoning to the
+agents behind it.
+
+## Code Diagram
+
 # Tech Stack
 
-| Area            | Choice                                                                 |
-| --------------- | --------------------------------------------------------------------- |
-| Language        | Python 3.14 (local `.venv/`)                                          |
-| Agent protocol  | `a2a-sdk` (the protobuf-based `a2a` package)                          |
-| LLM access      | `openai` client pointed at OpenRouter via a custom `base_url`         |
-| PDF parsing     | `markitdown` (PDF → Markdown)                                         |
-| CLI / output    | `typer` + `rich`                                                      |
-| HTTP serving    | `starlette` / `uvicorn` / `sse-starlette` (A2A endpoint)             |
-| Tooling         | `ruff`, `autoflake`, `nbqa`                                           |
+| Area           | Choice                                                        |
+| -------------- | ------------------------------------------------------------- |
+| Language       | Python 3.14 (local `.venv/`)                                  |
+| Agent protocol | `a2a-sdk` (the protobuf-based `a2a` package)                  |
+| LLM access     | `openai` client pointed at OpenRouter via a custom `base_url` |
+| PDF parsing    | `markitdown` (PDF → Markdown)                                 |
+| CLI / output   | `typer` + `rich`                                              |
+| HTTP serving   | `starlette` / `uvicorn` / `sse-starlette` (A2A endpoint)      |
+| Tooling        | `ruff`, `autoflake`, `nbqa`                                   |
 
 Runtime dependencies are pinned in `requirements.txt`.
 
@@ -98,9 +128,9 @@ The repository is organized around agents and a CLI:
 Key CLI commands:
 
 ```bash
-python -m cli.main convert path/to/cv.pdf        # PDF -> output/<stem>.md
-python -m cli.main build-resume output/resume.md # Markdown -> structured Resume JSON
-python -m cli.main serve-agent --port 8001       # run the Resume Builder as an A2A server
+yahr convert path/to/cv.pdf        # PDF -> output/<stem>.md
+yahr build-resume output/resume.md # Markdown -> structured Resume JSON
+yahr serve-agent --port 8001       # run the Resume Builder as an A2A server
 ```
 
 # Testing
@@ -119,19 +149,14 @@ The Resume Builder agent is deployed as an A2A HTTP service (Starlette served
 by uvicorn), exposing JSON-RPC and agent-card endpoints:
 
 ```bash
-python -m cli.main serve-agent --host 127.0.0.1 --port 8001
-python -m agents.resume_builder.server --port 8001   # equivalent, no CLI
+yahr serve-agent --host 127.0.0.1 --port 8001
 ```
 
 The CLI itself runs locally against a Python 3.14 virtual environment.
 
 # Conclusion
 
-YAHR demonstrates how the A2A protocol enables a modular, loosely coupled
-multi-agent design for an end-to-end career-assistant workflow. The Resume
-Builder agent is implemented today; the Job Searcher, Ranker, and CV Assistant
-agents are planned and slot into the same orchestration without changing the
-established contracts.
+
 
 # Changelog
 
