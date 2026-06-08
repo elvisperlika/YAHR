@@ -78,12 +78,14 @@ model {
   // Container relationships (cli is defined in CLI.c4)
   yahr.cli -> orchestrator 'Starts the workflow (A2A)'
 
+  orchestrator -> resumeBuilder 'Requests structured resume parsing (A2A)'
   orchestrator -> jobSearcher 'Requests matching jobs (A2A)'
-  orchestrator -> ranker 'Requests profile parsing & job scoring (A2A)'
+  orchestrator -> ranker 'Requests job scoring (A2A)'
   orchestrator -> cvAssistant 'Requests improvement suggestions (A2A)'
 
+  resumeBuilder -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
   jobSearcher -> jobApis 'Searches for open positions (HTTPS)'
-  ranker -> openrouter 'Extracts structured Resume & scores jobs (HTTPS / JSON)'
+  ranker -> openrouter 'Scores jobs against the profile (HTTPS / JSON)'
   cvAssistant -> openrouter 'Generates resume suggestions (HTTPS / JSON)'
 }
 

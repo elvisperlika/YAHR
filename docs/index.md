@@ -27,8 +27,6 @@ enables a modular, loosely coupled multi-agent design.
 
 # Domain
 
-![C4-Index](image/c4-index.png)
-
 The diagram above is the *System Context*: a single **Job Seeker** interacts
 with **YAHR** from the terminal, while YAHR depends on two external systems —
 **OpenRouter** (an OpenAI-compatible LLM gateway) for all language-model
@@ -62,6 +60,18 @@ structured `Resume`** (Resume Builder + LLM) **→ matching jobs** (Job Searcher
 The container-level view of the agents and their dependencies is maintained in
 `docs/c4/YAHR.c4` (System Context + Containers) and `docs/c4/CLI.c4` (the CLI
 commands).
+
+## System Context Diagram
+
+![C4-System-Context](image/c4-system-context.png)
+
+## Container Diagram
+
+![C4-Containers](image/c4-containers.png)
+
+## Component Diagram
+
+## Code Diagram
 
 # Tech Stack
 
