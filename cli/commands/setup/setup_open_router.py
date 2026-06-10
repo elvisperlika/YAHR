@@ -1,42 +1,14 @@
-from pathlib import Path
-
 import typer
 
 from cli.app import app, console, err_console
+from cli.commands.setup.env_file import ENV_FILE, upsert_env
 
-ENV_FILE = Path(".env")
 KEY = "API_KEY"
 BASE_URL = "BASE_URL"
 MODEL = "MODEL"
 
 
-def _upsert_env(path: Path, key: str, value: str) -> bool:
-    """Set ``key=value`` in the env file at ``path``.
-
-    Existing lines for other keys are preserved. Returns ``True`` if the key was
-    already present (and updated), ``False`` if it was newly added.
-    """
-    line = f"{key}={value}"
-
-    existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    lines = existing.splitlines()
-
-    found = False
-    for i, current in enumerate(lines):
-        stripped = current.lstrip()
-        if stripped.startswith(f"{key}=") or stripped.startswith(f"{key} ="):
-            lines[i] = line
-            found = True
-            break
-
-    if not found:
-        lines.append(line)
-
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return found
-
-
-@app.command()
+@app.command(name="setup-openrouter")
 def setup(
     api_key: str = typer.Option(
         None,
@@ -81,7 +53,7 @@ def setup(
             err_console.print(f"[red]Error:[/red] {key} must not be empty.")
             raise typer.Exit(code=1)
 
-        updated = _upsert_env(ENV_FILE, key, value)
+        updated = upsert_env(ENV_FILE, key, value)
         verb = "Updated" if updated else "Saved"
         console.print(f"[green]{verb}[/green] {key} → {ENV_FILE}")
         wrote_any = True

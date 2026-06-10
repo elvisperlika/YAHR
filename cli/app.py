@@ -26,4 +26,5 @@ app = typer.Typer(
 console = Console()
 err_console = Console(stderr=True)
 
-from cli.commands import convert, resume, setup, welcome  # noqa: E402, F401
+from cli.commands import convert, resume, welcome  # noqa: E402, F401
+from cli.commands.setup import setup_jobs_provider, setup_open_router  # noqa: E402, F401
