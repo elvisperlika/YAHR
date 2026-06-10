@@ -1,6 +1,10 @@
-// YAHR — CLI interface (C4 Container/Component view, LikeC4 DSL).
+// YAHR — CLI interface (C4 Container/Component/Code views, LikeC4 DSL).
 // Extends the model defined in YAHR.c4 (shared workspace): reuses `yahr`,
-// `user`, and `openrouter` rather than redefining them.
+// `user`, `openrouter`, and the agents rather than redefining them.
+//
+// Code level (C4 level 4): each command nests the Python function that
+// implements it; shared modules (`cli.main`, `cli.app`, the setup `env_file`
+// helper) and the `.env` file are modeled alongside.
 
 specification {
   element container {
@@ -14,6 +18,24 @@ specification {
       color muted
     }
   }
+  element module {
+    style {
+      shape rectangle
+      color slate
+    }
+  }
+  element function {
+    style {
+      shape rectangle
+      color gray
+    }
+  }
+  element file {
+    style {
+      shape storage
+      color amber
+    }
+  }
 }
 
 model {
@@ -22,18 +44,68 @@ model {
       description 'CLI app.'
       technology 'Python · Typer · Rich'
 
+      mainModule = module 'cli.main' {
+        description 'Entry point (python -m cli.main): main() just runs the Typer app.'
+      }
+      appModule = module 'cli.app' {
+        description 'Builds the shared Typer app (rich help text, help shown when called with no args) and the Rich stdout/stderr consoles; imports the command modules so they self-register.'
+        technology 'typer.Typer · rich.Console'
+      }
+
       convertCmd = command 'convert' {
         description 'Converts a PDF resume to Markdown, written to output/<stem>.md.'
         technology 'markitdown'
+
+        convertFn = function 'convert()' {
+          description 'Validates the PDF path, converts it with MarkItDown and writes <stem>.md next to the PDF (or under --output).'
+        }
       }
       buildResumeCmd = command 'build-resume' {
         description 'Parses resume Markdown into a structured Resume; prints the JSON or saves it with --output. Shows a live status spinner while the LLM runs.'
+
+        buildResumeFn = function 'build_resume()' {
+          description 'Reads the Markdown, runs build_resume_from_markdown_sync() under a status spinner, drops raw_text and prints or saves the Resume JSON.'
+        }
       }
       serveAgentCmd = command 'serve-agent' {
         description 'Runs the Resume Builder agent as an A2A HTTP server (--host/--port).'
+
+        serveAgentFn = function 'serve_agent()' {
+          description 'Lazily imports agents.resume_builder.server.serve and blocks serving the A2A HTTP endpoint.'
+        }
       }
       welcomeCmd = command 'welcome' {
         description 'Prints a friendly greeting.'
+
+        welcomeFn = function 'welcome()' {
+          description 'Prints the greeting on the shared Rich console.'
+        }
+      }
+      setupOpenRouterCmd = command 'setup-openrouter' {
+        description 'Saves the OpenRouter settings (API_KEY, BASE_URL, MODEL) to the .env file; prompts for the API key when run with no options.'
+
+        setupOpenRouterFn = function 'setup()' {
+          description 'Validates each provided option (non-empty after strip) and upserts it into .env, reporting Saved/Updated per key.'
+        }
+      }
+      setupJobsProviderCmd = command 'setup-jobs-provider' {
+        description 'Saves the job-search provider settings (JOBS_PROVIDER plus Adzuna app id/key and default country) to the .env file.'
+
+        setupJobsProviderFn = function 'setup_jobs_provider()' {
+          description 'Checks the provider is supported (adzuna), prompts for missing Adzuna credentials and upserts each value into .env.'
+        }
+      }
+
+      envFileModule = module 'cli.commands.setup.env_file' {
+        description 'Shared helper for the setup-* commands: agrees on the .env location and how key/value pairs are upserted.'
+
+        upsertEnvFn = function 'upsert_env()' {
+          description 'Sets key=value in the env file, preserving other lines; reports whether the key already existed.'
+        }
+      }
+
+      envFile = file '.env' {
+        description 'Project-local env file holding the OpenRouter and job-provider settings read by the agents.'
       }
     }
   }
@@ -43,10 +115,26 @@ model {
   user -> cli.buildResumeCmd 'cli.main build-resume resume.md'
   user -> cli.serveAgentCmd 'cli.main serve-agent'
   user -> cli.welcomeCmd 'cli.main welcome'
+  user -> cli.setupOpenRouterCmd 'cli.main setup-openrouter'
+  user -> cli.setupJobsProviderCmd 'cli.main setup-jobs-provider'
 
-  // Outbound dependencies of the individual commands.
-  cli.buildResumeCmd -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
-  cli.serveAgentCmd -> openrouter 'Serves an agent that extracts Resumes via LLM'
+  // Code-level: startup and Typer dispatch.
+  cli.mainModule -> cli.appModule 'main() invokes the Typer app'
+  cli.appModule -> cli.convertCmd.convertFn 'dispatches to (registered via @app.command)'
+  cli.appModule -> cli.buildResumeCmd.buildResumeFn 'dispatches to (registered via @app.command)'
+  cli.appModule -> cli.serveAgentCmd.serveAgentFn 'dispatches to (registered via @app.command)'
+  cli.appModule -> cli.welcomeCmd.welcomeFn 'dispatches to (registered via @app.command)'
+  cli.appModule -> cli.setupOpenRouterCmd.setupOpenRouterFn 'dispatches to (registered via @app.command)'
+  cli.appModule -> cli.setupJobsProviderCmd.setupJobsProviderFn 'dispatches to (registered via @app.command)'
+
+  // Code-level: what each command calls. The resume commands reach OpenRouter
+  // through the Resume Builder agent code (resumeBuilder -> openrouter is
+  // modeled in YAHR.c4).
+  cli.buildResumeCmd.buildResumeFn -> yahr.resumeBuilder 'calls build_resume_from_markdown_sync() in-process'
+  cli.serveAgentCmd.serveAgentFn -> yahr.resumeBuilder 'assembles the Starlette app and serves it with uvicorn'
+  cli.setupOpenRouterCmd.setupOpenRouterFn -> cli.envFileModule.upsertEnvFn 'upserts each provided key'
+  cli.setupJobsProviderCmd.setupJobsProviderFn -> cli.envFileModule.upsertEnvFn 'upserts each provided key'
+  cli.envFileModule.upsertEnvFn -> cli.envFile 'reads and rewrites key=value lines'
 }
 
 views {
@@ -54,7 +142,89 @@ views {
     title 'YAHR CLI — Commands'
 
     include *
+    exclude cli.mainModule, cli.appModule, cli.envFileModule, cli.envFile
 
     autoLayout TopBottom
+  }
+
+  view cliCode of cli {
+    title 'YAHR CLI — Code'
+    description 'Code-level view: entry point, Typer dispatch and the function behind each command.'
+
+    include *, cli.**
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  // Per-command code views: each is scoped `of` its command, so the commands
+  // in the views above are navigable — drill down into a command to see its code.
+
+  view convertCmdCode of cli.convertCmd {
+    title 'convert — Code'
+    description 'PDF → Markdown conversion via MarkItDown.'
+
+    include *
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  view buildResumeCmdCode of cli.buildResumeCmd {
+    title 'build-resume — Code'
+    description 'Markdown → structured Resume through the Resume Builder agent code.'
+
+    include *, openrouter
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  view serveAgentCmdCode of cli.serveAgentCmd {
+    title 'serve-agent — Code'
+    description 'Serves the Resume Builder agent as an A2A HTTP endpoint.'
+
+    include *, openrouter
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  view welcomeCmdCode of cli.welcomeCmd {
+    title 'welcome — Code'
+
+    include *
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  view setupOpenRouterCmdCode of cli.setupOpenRouterCmd {
+    title 'setup-openrouter — Code'
+    description 'Persists API_KEY / BASE_URL / MODEL through the shared env_file helper.'
+
+    include *, cli.envFileModule, cli.envFileModule.*, cli.envFile
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  view setupJobsProviderCmdCode of cli.setupJobsProviderCmd {
+    title 'setup-jobs-provider — Code'
+    description 'Persists JOBS_PROVIDER and Adzuna credentials through the shared env_file helper.'
+
+    include *, cli.envFileModule, cli.envFileModule.*, cli.envFile
+    exclude user
+
+    autoLayout LeftRight
+  }
+
+  view envFileModuleCode of cli.envFileModule {
+    title 'env_file helper — Code'
+    description 'Shared upsert helper used by both setup-* commands.'
+
+    include *
+
+    autoLayout LeftRight
   }
 }

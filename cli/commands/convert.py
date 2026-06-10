@@ -12,7 +12,7 @@ def convert(
         None, "--output", "-o", help="Path to save the converted Markdown file"
     ),
 ):
-    """Convert a PDF to Markdown."""
+    """Convert a PDF to Markdown using MarkItDown."""
     if not pdf.exists():
         err_console.print(f"[red]Error:[/red] File not found: {pdf}")
         raise typer.Exit(code=1)
