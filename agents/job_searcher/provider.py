@@ -42,6 +42,7 @@ class JobProvider(ABC):
         what: str,
         where: str = "",
         limit: int = 20,
+        with_salary: bool = False,
     ) -> list[JobPosting]:
         """Return up to ``limit`` postings matching ``what`` in ``where``.
 
@@ -49,5 +50,7 @@ class JobProvider(ABC):
             what: Free-text keywords (role, skills, …).
             where: Location filter; empty means no location constraint.
             limit: Maximum number of postings to return.
+            with_salary: When ``True``, only return postings that disclose a
+                salary (``salary_min`` or ``salary_max`` set).
         """
         raise NotImplementedError

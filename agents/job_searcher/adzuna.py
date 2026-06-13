@@ -72,6 +72,7 @@ class AdzunaProvider(JobProvider):
         what: str,
         where: str = "",
         limit: int = 20,
+        with_salary: bool = False,
     ) -> list[JobPosting]:
         params = {
             "app_id": self.app_id,
@@ -82,14 +83,24 @@ class AdzunaProvider(JobProvider):
         }
         if where:
             params["where"] = where
+        if with_salary:
+            # Adzuna drops salary-less listings once a salary_min is set, so a
+            # floor of 1 keeps only postings that disclose a figure.
+            params["salary_min"] = 1
 
         url = f"{self.base_url}/{self._config.country}/search/1"
-        async with httpx.AsyncClient(timeout=20) as client:
+        # To receive JSON we must setup the Accept header
+        headers = {"Accept": "application/json"}
+        async with httpx.AsyncClient(timeout=20, headers=headers) as client:
             resp = await client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
 
-        return [self._to_posting(r) for r in data.get("results", [])]
+        postings = [self._to_posting(r) for r in data.get("results", [])]
+        if with_salary:
+            # Guard against any listings the API leaves salary-less.
+            postings = [p for p in postings if p.salary_min or p.salary_max]
+        return postings
 
     def _to_posting(self, raw: dict) -> JobPosting:
         """Map one Adzuna result into a normalized :class:`JobPosting`."""
