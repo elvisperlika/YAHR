@@ -5,7 +5,15 @@ description = "YAHR — Yet Another HR career co-pilot."
 requires-python = ">=3.14"
 # ponytail: markitdown pinned to 0.0.2 — the last release installable on Python 3.14
 # (0.1.x pulls magika→onnxruntime, which has no 3.14 wheel). PDF works natively in 0.0.2.
-dependencies = ["typer", "rich", "markitdown==0.0.2"]
+dependencies = [
+    "typer",
+    "rich",
+    "markitdown==0.0.2",
+    "a2a-sdk[http-server]",
+    "openai",
+    "httpx",
+    "uvicorn",
+]
 
 [project.scripts]
 yahr = "yahr.cli:app"

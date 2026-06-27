@@ -1,7 +1,9 @@
 import typer
 
+from yahr.cli.commands.ask import ask
 from yahr.cli.commands.convert import convert
 from yahr.cli.commands.hello import hello
+from yahr.cli.commands.serve import serve
 
 app = typer.Typer(
     help="YAHR — Yet Another HR career co-pilot.",
@@ -16,6 +18,8 @@ def main():
 
 app.command()(hello)
 app.command()(convert)
+app.command()(serve)
+app.command()(ask)
 
 
 if __name__ == "__main__":
