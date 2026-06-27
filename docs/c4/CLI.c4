@@ -1,0 +1,98 @@
+// YAHR — CLI interface (C4 Container/Component/Code views, LikeC4 DSL).
+// Extends the model defined in YAHR.c4 (shared workspace): reuses `yahr`,
+// `user`, `openrouter`, and the agents rather than redefining them.
+//
+// Code level (C4 level 4): each command nests the Python function that
+// implements it; shared modules (`cli.main`, `cli.app`, the setup `env_file`
+// helper) and the `.env` file are modeled alongside.
+
+specification {
+  element container {
+    style {
+      shape rectangle
+    }
+  }
+  element command {
+    style {
+      shape rectangle
+      color muted
+    }
+  }
+  element module {
+    style {
+      shape rectangle
+      color slate
+    }
+  }
+  element function {
+    style {
+      shape rectangle
+      color gray
+    }
+  }
+  element file {
+    style {
+      shape storage
+      color amber
+    }
+  }
+}
+
+model {
+  extend yahr {
+    cli = container 'YAHR CLI' {
+      description 'CLI app.'
+      technology 'Python · Typer · Rich'
+
+      convertCmd = command 'convert' {
+        description 'Converts a PDF resume to Markdown, written to output/<stem>.md.'
+        technology 'markitdown'
+      }
+
+      serveAgentCmd = command 'serve' {
+        description 'Runs any registered A2A agent as an HTTP server (AGENT arg, default resume-builder; --host/--port; --list to show all serveable agents).'
+      }
+      serveAllCmd = command 'serve-all' {
+        description 'Serves every YAHR agent at once, each on its default port, by spawning one `serve` subprocess per agent and forwarding their logs in a colour-tagged gutter until Ctrl-C; if any agent exits, the rest are shut down too.'
+        technology 'subprocess · threading'
+      }
+
+      helloCmd = command 'hello' {
+        description 'Prints a friendly greeting.'
+      }
+
+      matchCmd = command 'match' {
+        description 'Ranks jobs against the resume via the running orchestrator agent (--url, default 127.0.0.1:8004; --what / --where / --limit / --with-salary shape the search). Renders the ranked jobs (score, title, company, reasoning) as a Rich table, and saves the rankings as JSON with --output. (The orchestrator also defines a refinement loop; only the ranking phase is wired into the CLI so far.)'
+        technology 'a2a-sdk client · httpx'
+      }
+
+      setupOpenRouterCmd = command 'setup-openrouter' {
+        description 'Saves the OpenRouter settings (API_KEY, BASE_URL, MODEL) to the .env file; prompts for the API key when run with no options.'
+      }
+
+      setupJobsProviderCmd = command 'setup-jobs-provider' {
+        description 'Saves the job-search provider settings (JOBS_PROVIDER plus Adzuna app id/key and default country) to the .env file.'
+      }
+    }
+  }
+
+  // How the user reaches each command from the terminal.
+  user -> cli.convertCmd 'yahr convert cv.pdf'
+  user -> cli.serveAgentCmd 'yahr serve resume-builder'
+  user -> cli.serveAllCmd 'yahr serve-all'
+  user -> cli.helloCmd 'yahr hello'
+  user -> cli.matchCmd 'yahr match resume.md --what "python developer"'
+  user -> cli.setupOpenRouterCmd 'yahr setup-openrouter'
+  user -> cli.setupJobsProviderCmd 'yahr setup-jobs-provider'
+  cli.serveAllCmd -> cli.serveAgentCmd 'spawns one `serve` subprocess per agent'
+}
+
+views {
+  view cliInterface of cli {
+    title 'YAHR CLI — Commands'
+
+    include *
+
+    autoLayout TopBottom
+  }
+}

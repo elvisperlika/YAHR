@@ -1,0 +1,75 @@
+views {
+  dynamic view pipeline {
+    title 'YAHR — Pipeline'
+
+    parallel {
+      yahr.orchestrator -> yahr.resumeBuilder 'Requests structured resume parsing (A2A)'
+      yahr.orchestrator -> yahr.jobSearcher 'Requests matching jobs (A2A)'
+    }
+
+    parallel {
+      yahr.resumeBuilder -> yahr.ranker 'Sends structured resume for scoring (A2A)'
+      yahr.jobSearcher -> yahr.ranker 'Sends structured job postings for scoring (A2A)'
+    }
+
+    yahr.ranker -> yahr.orchestrator 'Returns ranked jobs + per-section gaps (A2A)'
+
+    // The orchestrator routes the weakest section to its assistant each round;
+    // all four section rewriters are shown here for completeness.
+    parallel {
+      yahr.orchestrator -> yahr.summaryAssistant 'Rewrite the summary section (A2A)'
+      yahr.orchestrator -> yahr.skillsAssistant 'Rewrite the skills section (A2A)'
+      yahr.orchestrator -> yahr.experienceAssistant 'Rewrite the work-experience section (A2A)'
+      yahr.orchestrator -> yahr.projectsAssistant 'Rewrite the projects section (A2A)'
+    }
+
+    autoLayout LeftRight
+  }
+
+  dynamic view refineLoop {
+    variant sequence
+
+    title 'YAHR — Resume Refinement Loop'
+    description '''
+      Two orchestrator calls. The first ranks the resume against the searched jobs;
+      the user picks one target job in the CLI. The second drives an iterative rewrite
+      loop — pick the weakest section from the ranker\'s gaps, route it to that section\'s
+      assistant, re-rank the patched resume against the chosen job, and keep the rewrite
+      only if the score rises — until no gap-bearing section helps or a round cap (N=5)
+      is reached. This convergence + stop condition is what the CLI cannot own cleanly.
+    '''
+
+    // Call 1 — rank.
+    yahr.cli -> yahr.orchestrator 'Rank resume vs jobs (A2A)'
+    parallel {
+      yahr.orchestrator -> yahr.resumeBuilder 'Build structured resume'
+      yahr.orchestrator -> yahr.jobSearcher 'Search & enrich jobs'
+    }
+    yahr.orchestrator <- yahr.resumeBuilder 'Resume'
+    yahr.orchestrator <- yahr.jobSearcher 'Job postings'
+    yahr.orchestrator -> yahr.ranker 'Score resume vs jobs'
+    yahr.orchestrator <- yahr.ranker 'Ranked jobs + per-section gaps'
+    yahr.cli <- yahr.orchestrator 'Ranked jobs (user picks a target)'
+
+    // Call 2 — improve the resume for the chosen job.
+    yahr.cli -> yahr.orchestrator 'Improve resume for chosen job (A2A)' {
+      notes '''
+        **Loop start.** Each round the orchestrator calls only ONE section's assistant —
+        the weakest from the ranker's gaps (summary / skills / experience / projects),
+        shown here as skills. Repeat until no gap-bearing section raises the score, or
+        round == N (5).
+      '''
+    }
+    yahr.orchestrator -> yahr.skillsAssistant 'Rewrite the weakest section (existing facts only)'
+    yahr.orchestrator <- yahr.skillsAssistant 'Rewritten section'
+
+    yahr.orchestrator -> yahr.ranker 'Re-rank patched resume vs chosen job' {
+      notes '''
+        **Loop back.** Keep the rewrite only if the score rises; otherwise drop it and
+        mark the section tried. Exit when no candidate section remains or rounds exhausted.
+      '''
+    }
+    yahr.orchestrator <- yahr.ranker 'Updated score + gaps'
+    yahr.cli <- yahr.orchestrator 'Best resume + change log'
+  }
+}

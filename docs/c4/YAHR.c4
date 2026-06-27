@@ -1,0 +1,127 @@
+// YAHR (Yet Another HR) — C4 model (LikeC4 DSL).
+// See https://likec4.dev for syntax / tooling.
+//
+// This file owns the System Context and the agent containers of YAHR.
+// The `cli` container (and the `container` element kind) is defined in
+// CLI.c4, which shares this workspace's model — reused here, not redefined.
+
+specification {
+  element person {
+    style {
+      shape person
+    }
+  }
+  element system
+  element agent {
+    style {
+      shape person
+      color green
+    }
+  }
+  element externalSystem {
+    style {
+      color secondary
+    }
+  }
+}
+
+model {
+  user = person 'User' {
+    description 'Runs the CLI to parse a resume, find matching jobs, and get improvement suggestions.'
+  }
+
+  yahr = system 'YAHR' {
+    description 'Personal HR assistant CLI: parses a resume PDF, searches for matching jobs, and suggests resume improvements.'
+
+    // The `cli` container is defined in CLI.c4 (extend yahr). The A2A agents
+    // that the CLI orchestrates are defined here.
+
+    orchestrator = agent 'Orchestrator Agent' {
+      description 'Coordinates the agents over A2A in two phases: first it ranks the resume against the searched jobs; then, for a job the user picks, it drives an iterative loop that rewrites the weakest section of the resume and re-ranks until the score plateaus or a round cap is hit. (planned)'
+      technology 'A2A'
+    }
+
+    resumeBuilder = agent 'Resume Parser Agent' {
+      description 'Turns resume Markdown into a structured Resume via an OpenRouter-hosted LLM.'
+      technology 'A2A, OpenAI client, Starlette/uvicorn'
+    }
+
+    jobSearcher = agent 'Job Searcher Agent' {
+      description 'Discovers open positions via a job board API (Adzuna), then enriches each posting.'
+      technology 'A2A, httpx, markitdown, OpenAI client'
+    }
+
+    ranker = agent 'Matching / Ranker Agent' {
+      description 'Scores each open position against the structured profile (0-100) and flags per-section gaps (skills / work experience / projects) the orchestrator targets when rewriting. (planned)'
+      technology 'A2A, LLM'
+    }
+
+    summaryAssistant = agent 'Summary Assistant Agent' {
+      description 'Crafts a concise resume summary emphasizing the candidate’s unique value proposition and fit for the target job, using only facts already present in the resume — it never invents experience. (planned)'
+      technology 'A2A, LLM'
+    }
+    skillsAssistant = agent 'Skills Assistant Agent' {
+      description 'Rewrites the skills section to surface skills relevant to the chosen job, using only facts already present in the resume — it never invents experience. (planned)'
+      technology 'A2A, LLM'
+    }
+    experienceAssistant = agent 'Experience Assistant Agent' {
+      description 'Reframes work-experience descriptions toward the chosen job, using only facts already present in the resume — it never invents experience. (planned)'
+      technology 'A2A, LLM'
+    }
+    projectsAssistant = agent 'Projects Assistant Agent' {
+      description 'Reframes project descriptions toward the chosen job, using only facts already present in the resume — it never invents experience. (planned)'
+      technology 'A2A, LLM'
+    }
+  }
+
+  openrouter = externalSystem 'OpenRouter' {
+    description 'LLM gateway (OpenAI-compatible API) for LLM reasoning.'
+  }
+
+  jobApis = externalSystem 'Job Board APIs' {
+    description 'External job listing providers queried for open positions matching the candidate profile.'
+  }
+
+  // System Context relationships
+  user -> yahr 'Get resume parsing, job search, and improvement suggestions.'
+  yahr -> openrouter 'Reasons over resume & jobs via LLM (HTTPS / JSON)'
+  yahr -> jobApis 'Fetches open job listings from (HTTPS)'
+
+  // Container relationships (cli is defined in CLI.c4)
+  yahr.cli -> orchestrator 'Starts the workflow (A2A)'
+
+  orchestrator -> resumeBuilder 'Requests structured resume parsing (A2A)'
+  orchestrator -> jobSearcher 'Requests matching jobs (A2A)'
+  orchestrator -> ranker 'Requests job scoring (A2A)'
+  orchestrator -> skillsAssistant 'Routes the skills section for rewriting (A2A)'
+  orchestrator -> experienceAssistant 'Routes the work-experience section for rewriting (A2A)'
+  orchestrator -> projectsAssistant 'Routes the projects section for rewriting (A2A)'
+  orchestrator -> summaryAssistant 'Routes the summary section for rewriting (A2A)'
+
+  resumeBuilder -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
+  jobSearcher -> jobApis 'Searches for open positions & fetches listing pages (HTTPS)'
+  jobSearcher -> openrouter 'Parses each listing page into structured JobDetails via LLM (HTTPS / JSON)'
+  ranker -> openrouter 'Scores jobs against the profile (HTTPS / JSON)'
+  summaryAssistant -> openrouter 'Rewrites the summary section via LLM (HTTPS / JSON)'
+  skillsAssistant -> openrouter 'Rewrites the skills section via LLM (HTTPS / JSON)'
+  experienceAssistant -> openrouter 'Rewrites the work-experience section via LLM (HTTPS / JSON)'
+  projectsAssistant -> openrouter 'Rewrites the projects section via LLM (HTTPS / JSON)'
+}
+
+views {
+  view index {
+    title 'YAHR — System Context'
+
+    include user, yahr, openrouter, jobApis
+
+    autoLayout TopBottom
+  }
+
+  view containers of yahr {
+    title 'YAHR — Containers'
+
+    include *
+
+    autoLayout TopBottom
+  }
+}
