@@ -27,11 +27,18 @@ class AgentAddress:
         return f"http://{self.ip}:{self.port}"
 
 
-# Single source of truth for the Job Searcher's address: both its server (serve)
-# and the discovery list below derive from it.
+# Canonical agent names: the Agent Cards advertise these, and the Orchestrator
+# matches on them to chain the searcher's jobs into the ranker. Single source of
+# truth — the cards import these so the names can never drift apart.
+JOB_SEARCHER_NAME = "Job Searcher Agent"
+RANKER_NAME = "Ranker Agent"
+
+# Single source of truth for each agent's address: both its server (serve) and
+# the discovery list below derive from it.
 JOB_SEARCHER_ADDRESS = AgentAddress("127.0.0.1", 8002)
+RANKER_ADDRESS = AgentAddress("127.0.0.1", 8003)
 
 # Base URLs the Orchestrator probes for agent cards. Only running agents that
 # actually serve a card are discovered and become routing candidates; add
 # endpoints here as more agents come online.
-AGENT_URLS: list[str] = [JOB_SEARCHER_ADDRESS.url]
+AGENT_URLS: list[str] = [JOB_SEARCHER_ADDRESS.url, RANKER_ADDRESS.url]

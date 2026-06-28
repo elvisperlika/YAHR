@@ -1,20 +1,24 @@
-"""The Job Searcher's public A2A agent card (served at the well-known path)."""
+"""The Ranker's public A2A agent card (served at the well-known path)."""
 
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
 from a2a.utils.constants import TransportProtocol
 
-from yahr.agents.roster import JOB_SEARCHER_NAME
+from yahr.agents.roster import RANKER_NAME
 
 
 def agent_card(url: str) -> AgentCard:
-    """Build the Job Searcher's public agent card served at the well-known path.
+    """Build the Ranker's public agent card served at the well-known path.
 
     Args:
         url: Base URL the agent is reachable at (its JSONRPC interface).
     """
     return AgentCard(
-        name=JOB_SEARCHER_NAME,
-        description="Discovers open positions via some APIs.",
+        name=RANKER_NAME,
+        description=(
+            "Scores found jobs against your resume and ranks the best matches — "
+            "answers which jobs fit you and why. Use for matching, ranking, or "
+            "'which job suits me', NOT for plain job search."
+        ),
         version="0.1.0",
         supported_interfaces=[
             AgentInterface(protocol_binding=TransportProtocol.JSONRPC, url=url)
@@ -25,10 +29,10 @@ def agent_card(url: str) -> AgentCard:
         default_output_modes=["text/plain"],
         skills=[
             AgentSkill(
-                id="search-jobs",
-                name="Search jobs",
-                description="Find open positions matching a natural-language query.",
-                tags=["jobs", "search"],
+                id="rank-jobs",
+                name="Rank jobs",
+                description="Score and rank open positions against a resume to answer which fit best.",
+                tags=["jobs", "ranking", "match"],
             )
         ],
     )

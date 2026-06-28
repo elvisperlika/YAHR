@@ -212,6 +212,7 @@ pyrightconfig.json
 
 resume.pdf
 resume.md
+jobs.md
 
 # Local configuration files
 .husky/_/

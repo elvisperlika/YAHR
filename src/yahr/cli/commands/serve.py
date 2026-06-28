@@ -3,12 +3,12 @@
 import typer
 from rich.console import Console
 
-from yahr.agents import job_searcher
+from yahr.agents import job_searcher, ranker
 
 console = Console()
 
-# ponytail: only the built agent is registered; grows as agents land.
-_AGENTS = {"job-searcher": job_searcher.serve}
+# ponytail: built agents only; grows as more land.
+_AGENTS = {"job-searcher": job_searcher.serve, "ranker": ranker.serve}
 
 
 def serve(agent: str = typer.Argument("job-searcher")):

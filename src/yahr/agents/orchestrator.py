@@ -7,13 +7,14 @@ Only agents that are actually running (and thus serving a card) are routable.
 """
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import httpx
 from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.helpers import get_message_text, new_text_message
 from a2a.types import AgentCard, Role, SendMessageRequest, TaskState
 
-from yahr.agents.roster import AGENT_URLS
+from yahr.agents.roster import AGENT_URLS, JOB_SEARCHER_NAME, RANKER_NAME
 from yahr.config import openrouter_client
 
 # A status update relayed to the CLI: (state, text), e.g. ("working", "Querying…").
@@ -100,12 +101,75 @@ def _validate(raw: str | None, cards: Discovered) -> str | None:
     return None
 
 
+def needs_resume(query: str) -> bool:
+    """Ask the LLM whether answering this query benefits from the user's resume.
+
+    A plain job search (by keyword/location) does not; tailoring, ranking,
+    matching, or résumé advice does.
+
+    Args:
+        query: The user's natural-language request.
+    """
+    client, model = openrouter_client()
+    reply = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Decide whether answering the user's request needs their "
+                    "resume/CV. A plain job search by keyword or location does "
+                    "NOT need it; tailoring, ranking, matching a profile to "
+                    "jobs, or resume advice DOES. Reply ONLY 'yes' or 'no'."
+                ),
+            },
+            {"role": "user", "content": query},
+        ],
+    )
+    return (reply.choices[0].message.content or "").strip().lower().startswith("y")
+
+
+def _attach(query: str, resume: str) -> str:
+    """Append the resume to the query as a labelled section for the agent."""
+    return f"{query}\n\n--- Attached resume (Markdown) ---\n{resume}"
+
+
+# Where the orchestrator caches the jobs the Job Searcher last found, so a later
+# ranking query can rank against them without re-searching.
+_JOBS_CACHE = Path("output/jobs.md")
+
+
+def _cache_jobs(jobs: str) -> None:
+    """Persist the Job Searcher's found jobs for a later ranking query."""
+    _JOBS_CACHE.parent.mkdir(exist_ok=True)
+    _JOBS_CACHE.write_text(jobs)
+
+
+def _load_jobs() -> str | None:
+    """Return the last cached jobs, or None if nothing has been searched yet."""
+    return _JOBS_CACHE.read_text() if _JOBS_CACHE.exists() else None
+
+
+def _rank_message(query: str, resume: str | None, jobs: str) -> str:
+    """Bundle the ranker's input: the question, the found jobs, and the resume.
+
+    Args:
+        query: The user's original question.
+        resume: The resume Markdown, or None if there is none.
+        jobs: The Job Searcher's result text (its list of found jobs).
+    """
+    parts = [f"Question: {query}", "", "--- Jobs found ---", jobs or "(none)"]
+    if resume:
+        parts += ["", "--- Resume (Markdown) ---", resume]
+    return "\n".join(parts)
+
+
 def _state_label(state: TaskState) -> str:
     """Human-readable lowercase name for a protobuf TaskState (e.g. 'working')."""
     return TaskState.Name(state).removeprefix("TASK_STATE_").lower()
 
 
-async def route(query: str) -> AsyncIterator[Update]:
+async def route(query: str, resume: str | None = None) -> AsyncIterator[Update]:
     """Discover, route to the LLM-chosen agent, and stream the task's status.
 
     Yields (state, text) pairs as the chosen agent works — ending with a
@@ -113,6 +177,8 @@ async def route(query: str) -> AsyncIterator[Update]:
 
     Args:
         query: The user's natural-language request.
+        resume: The user's resume Markdown, or None. When present, the LLM
+            decides per-query whether it is useful and attaches it if so.
     """
     # ponytail: short connect timeout fails fast on dead endpoints; long read
     # timeout keeps the task's status stream open while the agent works.
@@ -126,9 +192,49 @@ async def route(query: str) -> AsyncIterator[Update]:
             yield "error", "No discovered agent fits that request."
             return
         _url, card = cards[name]
+
+        # The ranker scores jobs against the resume, so it needs the jobs as an
+        # artifact. Reuse the jobs the Job Searcher cached on an earlier run;
+        # only search afresh (and cache that) if nothing has been searched yet.
+        if name == RANKER_NAME:
+            jobs = _load_jobs()
+            if jobs is None and JOB_SEARCHER_NAME in cards:
+                yield "searching", "No cached jobs — searching first"
+                jobs = await _collect(http, cards[JOB_SEARCHER_NAME][1], query)
+                if jobs:
+                    _cache_jobs(jobs)
+            yield "routing", f"Routed to {name}"
+            message = _rank_message(query, resume, jobs or "")
+            async for update in _send(http, card, message):
+                yield update
+            return
+
+        message = query
+        if resume and needs_resume(query):
+            message = _attach(query, resume)
+            yield "context", "Attached your resume"
         yield "routing", f"Routed to {name}"
-        async for update in _send(http, card, query):
-            yield update
+        # Cache whatever the Job Searcher finds, so a later ranking query can
+        # rank against it without re-searching.
+        async for state, text in _send(http, card, message):
+            if name == JOB_SEARCHER_NAME and state == "completed":
+                _cache_jobs(text)
+            yield state, text
+
+
+async def _collect(http: httpx.AsyncClient, card: AgentCard, query: str) -> str:
+    """Run an agent to completion and return its final result text.
+
+    Args:
+        http: Async HTTP client (reused from discovery).
+        card: The agent to drive (here, the Job Searcher).
+        query: The text to forward.
+    """
+    final = ""
+    async for state, text in _send(http, card, query):
+        if state == "completed":
+            final = text
+    return final
 
 
 async def _send(
@@ -167,4 +273,12 @@ if __name__ == "__main__":
     assert _validate("none", fake) is None
     assert _validate("banana", fake) is None
     assert _validate(None, fake) is None
+    attached = _attach("find java jobs", "# CV\nElvis")
+    assert attached.startswith("find java jobs\n\n")
+    assert "# CV\nElvis" in attached
+    # Ranker bundle carries the question, the jobs, and (when present) the resume.
+    bundle = _rank_message("best fit?", "# CV\nElvis", "- Job A\n- Job B")
+    assert "Question: best fit?" in bundle
+    assert "- Job A" in bundle and "# CV\nElvis" in bundle
+    assert "Resume" not in _rank_message("best fit?", None, "- Job A")
     print("orchestrator self-check ok")
