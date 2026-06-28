@@ -218,3 +218,6 @@ resume.pdf
 node_modules/
 
 .claude
+
+CLAUDE.md
+AGENTS.md
