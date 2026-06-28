@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 from yahr.agents.roster import ADZUNA_MCP_ADDRESS
 from yahr.mcp.adzuna.client import search_adzuna
+from yahr.mcp.adzuna.enrich import with_full_descriptions
 
 mcp = FastMCP("yahr-adzuna", host=ADZUNA_MCP_ADDRESS.ip, port=ADZUNA_MCP_ADDRESS.port)
 
@@ -20,13 +21,17 @@ mcp = FastMCP("yahr-adzuna", host=ADZUNA_MCP_ADDRESS.ip, port=ADZUNA_MCP_ADDRESS
 async def search(query: str) -> dict[str, Any]:
     """Search Adzuna for jobs matching a natural-language query.
 
+    Adzuna's /search only returns a truncated description, so each result is then
+    enriched by fetching its link for the full posting (best-effort; see enrich.py).
+
     Args:
         query: The natural-language job query (e.g. "java jobs in milano with salary").
 
     Returns:
         A {"jobs": [...]} dict; each job carries the Job dataclass fields.
     """
-    return {"jobs": [asdict(j) for j in await search_adzuna(query)]}
+    jobs = await with_full_descriptions(await search_adzuna(query))
+    return {"jobs": [asdict(j) for j in jobs]}
 
 
 def serve() -> None:
