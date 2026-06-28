@@ -20,10 +20,14 @@ console = Console()
 _QUALIFIERS = {"senior", "junior", "mid", "lead", "remote", "hybrid", "contract"}
 
 _REFINE_SYSTEM = (
-    "You refine job-search queries for a job board. The current query returned "
-    "too few relevant results. Produce ONE broader or adjacent query likely to "
-    "surface more postings for the same kind of role (use synonyms or related "
-    "titles, widen scope). Reply with ONLY the query string — no quotes, no "
+    "You broaden a job-search query that returned too few results, so the next "
+    "search finds more of the SAME kind of role. Keep every constraint the user "
+    "stated — required skills, excluded terms, salary, contract type (full/part "
+    "time, permanent, contract), and company. Broaden in ONE step only: use a "
+    "synonym or adjacent job title, drop a seniority qualifier, or widen the "
+    "location one level within the same country (city -> province -> region), "
+    "never to another country. Do not drop the user's filters and do not invent "
+    "new ones. Reply with ONLY the resulting query string — no quotes, no "
     "explanation, no preamble."
 )
 
@@ -106,10 +110,11 @@ def _clean(raw: str | None, query: str) -> str | None:
     text = (raw or "").strip().strip("\"'`")
     if not text:
         return None
-    # ponytail: take the first line and length-cap it; a strict prompt usually
-    # yields a bare query, this just guards the occasional leaked preamble.
+    # ponytail: take the first line and length-cap it; the cap only guards the
+    # occasional leaked paragraph — kept roomy so a constraint-rich query (skills,
+    # exclusions, salary, location) survives instead of being rejected as prose.
     candidate = text.splitlines()[0].strip()
-    if not candidate or len(candidate) > 120 or candidate.lower() == query.lower():
+    if not candidate or len(candidate) > 200 or candidate.lower() == query.lower():
         return None
     return candidate
 
@@ -150,5 +155,8 @@ if __name__ == "__main__":
     assert _clean("java dev", "java dev") is None  # identical -> no progress
     assert _clean("", "x") is None
     assert _clean(None, "x") is None
-    assert _clean("x" * 200, "q") is None  # leaked prose -> rejected
+    # a constraint-rich query survives; only a runaway paragraph is rejected.
+    rich = "senior java OR kotlin developer, full time, permanent, exclude php, emilia-romagna, 40k+"
+    assert _clean(rich, "java dev") == rich
+    assert _clean("x" * 250, "q") is None  # leaked prose -> rejected
     print("refine self-check ok")
