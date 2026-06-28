@@ -12,13 +12,15 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 
-from yahr.agents.job_searcher.models import Job
+from yahr.agents.models.job import Job
 from yahr.agents.job_searcher.providers import Adzuna, MockProvider, Provider
 from yahr.agents.job_searcher.refine import refine
 
-# A unit of work the executor relays: (text, is_final). Progress steps carry
-# is_final=False; the single final step (is_final=True) is the task result.
-Step = tuple[str, bool]
+# A unit of work the executor relays: (text, is_final, jobs). Progress steps carry
+# is_final=False and jobs=None; the single final step (is_final=True) carries the
+# rendered text plus the structured jobs, which the executor ships as a data part
+# so the CLI can render them as cards.
+Step = tuple[str, bool, list[Job] | None]
 
 
 @dataclass(frozen=True)
@@ -52,21 +54,37 @@ def _select_provider() -> Provider:
         return MockProvider()
 
 
+def _job_md(job: Job) -> str:
+    """Render one job as a Markdown block, including every field it has.
+
+    Args:
+        job: The job to render. Optional fields ("" when absent) are skipped, so
+            a sparse mock job (title only) renders cleanly too.
+    """
+    parts = [f"### {job.title}"]
+    meta = " · ".join(p for p in (job.company, job.location) if p)
+    if meta:
+        parts.append(f"**{meta}**")
+    if job.description:
+        parts.append(job.description)
+    if job.url:
+        parts.append(f"[Apply]({job.url})")
+    return "\n\n".join(parts)
+
+
 def _render(cache: dict[str, Job]) -> str:
-    """Render the accumulated jobs into the task's final result text.
+    """Render the accumulated jobs into the task's final result (Markdown).
+
+    The CLI renders this as Rich Markdown for a pretty display; it also stays
+    readable when cached and handed to the ranker.
 
     Args:
         cache: The deduped jobs gathered across all rounds.
     """
     if not cache:
         return "No jobs found."
-    lines = "\n".join(
-        f"- {job.title}"
-        + (f" @ {job.company}" if job.company else "")
-        + (f" ({job.location})" if job.location else "")
-        for job in cache.values()
-    )
-    return f"Found {len(cache)} jobs:\n{lines}"
+    blocks = "\n\n---\n\n".join(_job_md(job) for job in cache.values())
+    return f"## {len(cache)} jobs found\n\n{blocks}"
 
 
 async def _run(
@@ -89,13 +107,13 @@ async def _run(
     query, calls = goal.query, 0
     for _ in range(goal.max_rounds):
         if calls >= goal.max_calls:
-            yield "Reached the API-call budget", False
+            yield "Reached the API-call budget", False, None
             break
         before = len(cache)
         for job in await fetch(query):
             cache.setdefault(job.id, job)
         calls += 1
-        yield f"{query!r}: +{len(cache) - before} (total {len(cache)})", False
+        yield f"{query!r}: +{len(cache) - before} (total {len(cache)})", False, None
         if len(cache) >= goal.target:  # goal met
             break
         # Broaden even when this round found nothing — an empty result is the
@@ -105,7 +123,7 @@ async def _run(
         if next_query == query:
             break
         query = next_query
-    yield _render(cache), True
+    yield _render(cache), True, list(cache.values())
 
 
 async def search(query: str) -> AsyncIterator[Step]:
@@ -167,6 +185,21 @@ if __name__ == "__main__":
             s async for s in _run(Goal("dev", target=99, max_calls=2), fetch, changing)
         ]
         assert shape(cap) and "4 jobs" in cap[-1][0], cap[-1][0]
+
+        # A full job renders every field; a sparse (title-only) job stays clean.
+        full = _job_md(
+            Job(
+                "1",
+                "Dev",
+                company="Acme",
+                location="Milano",
+                description="Spring",
+                url="http://x/1",
+            )
+        )
+        assert "### Dev" in full and "**Acme · Milano**" in full
+        assert "Spring" in full and "[Apply](http://x/1)" in full
+        assert _job_md(Job("2", "Solo")) == "### Solo"
 
         print("job_searcher.core self-check ok")
 

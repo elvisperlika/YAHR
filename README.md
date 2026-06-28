@@ -30,11 +30,9 @@ The orchestrator uses an LLM (via [OpenRouter](https://openrouter.ai/), OpenAI-c
 # .env
 OPENROUTER_API_KEY=sk-or-...
 # optional overrides
-OPENROUTER_MODEL=google/gemma-4-31b-it:free
+OPENROUTER_MODEL=openrouter/free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
-
-Only `ask` needs this; `convert` and `serve` run without a key.
 
 ## Commands
 
@@ -47,10 +45,16 @@ Only `ask` needs this; `convert` and `serve` run without a key.
 
 ### Try it
 
-`ask` only routes to agents that are actually running and serving an Agent Card, so start one first. In one terminal:
+`ask` only routes to agents that are actually running and serving an Agent Card, so start one first. In different terminals run:
 
 ```bash
+# Start the Job Searcher agent
 yahr serve job-searcher
+```
+
+```bash
+# Start the Ranker agent
+yahr serve ranker
 ```
 
 In another:

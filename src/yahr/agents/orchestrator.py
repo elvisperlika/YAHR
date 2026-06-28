@@ -8,17 +8,20 @@ Only agents that are actually running (and thus serving a card) are routable.
 
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
-from a2a.helpers import get_message_text, new_text_message
-from a2a.types import AgentCard, Role, SendMessageRequest, TaskState
+from a2a.helpers import get_data_parts, get_message_text, new_text_message
+from a2a.types import AgentCard, Message, Role, SendMessageRequest, TaskState
 
 from yahr.agents.roster import AGENT_URLS, JOB_SEARCHER_NAME, RANKER_NAME
 from yahr.config import openrouter_client
 
-# A status update relayed to the CLI: (state, text), e.g. ("working", "Querying…").
-Update = tuple[str, str]
+# A status update relayed to the CLI: (state, text, data), e.g.
+# ("working", "Querying…", None). data carries structured jobs on a job result,
+# None otherwise — so the CLI can render cards instead of plain text.
+Update = tuple[str, str, Any]
 
 # A discovered agent: its name -> (base url, fetched card).
 Discovered = dict[str, tuple[str, AgentCard]]
@@ -134,9 +137,11 @@ def _attach(query: str, resume: str) -> str:
     return f"{query}\n\n--- Attached resume (Markdown) ---\n{resume}"
 
 
-# Where the orchestrator caches the jobs the Job Searcher last found, so a later
-# ranking query can rank against them without re-searching.
+# Where the orchestrator caches its artifacts between `ask` runs, so a ranking
+# query can reuse them: the jobs the Job Searcher last found, and the last resume
+# the user attached. (resume.md is also where `convert` writes and `ask` reads.)
 _JOBS_CACHE = Path("output/jobs.md")
+_RESUME_CACHE = Path("output/resume.md")
 
 
 def _cache_jobs(jobs: str) -> None:
@@ -148,6 +153,18 @@ def _cache_jobs(jobs: str) -> None:
 def _load_jobs() -> str | None:
     """Return the last cached jobs, or None if nothing has been searched yet."""
     return _JOBS_CACHE.read_text() if _JOBS_CACHE.exists() else None
+
+
+def _cache_resume(resume: str) -> None:
+    """Persist the attached resume so a later query can reuse it unattached."""
+    if _load_resume() != resume:  # skip the no-op rewrite of an unchanged resume
+        _RESUME_CACHE.parent.mkdir(exist_ok=True)
+        _RESUME_CACHE.write_text(resume)
+
+
+def _load_resume() -> str | None:
+    """Return the cached resume, or None if none has been attached yet."""
+    return _RESUME_CACHE.read_text() if _RESUME_CACHE.exists() else None
 
 
 def _rank_message(query: str, resume: str | None, jobs: str) -> str:
@@ -172,24 +189,34 @@ def _state_label(state: TaskState) -> str:
 async def route(query: str, resume: str | None = None) -> AsyncIterator[Update]:
     """Discover, route to the LLM-chosen agent, and stream the task's status.
 
-    Yields (state, text) pairs as the chosen agent works — ending with a
-    ("completed", result) pair, or ("error", reason) if routing fails.
+    Yields (state, text, data) triples as the chosen agent works — ending with a
+    ("completed", result, jobs|None) triple, or ("error", reason, None) if routing
+    fails.
 
     Args:
         query: The user's natural-language request.
-        resume: The user's resume Markdown, or None. When present, the LLM
-            decides per-query whether it is useful and attaches it if so.
+        resume: The user's resume Markdown, or None. When present it is cached;
+            when absent the last cached resume is used. For a ranking query it is
+            sent to the ranker; otherwise the LLM decides per-query whether to
+            attach it.
     """
-    # ponytail: short connect timeout fails fast on dead endpoints; long read
-    # timeout keeps the task's status stream open while the agent works.
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=3.0)) as http:
+    # Remember the attached resume, and reuse the last one when none is given —
+    # mirroring the jobs cache, so a ranking query has the resume even unattached.
+    if resume:
+        _cache_resume(resume)
+    else:
+        resume = _load_resume()
+    # ponytail: short connect timeout fails fast on dead endpoints; no read
+    # timeout because the SSE status stream goes quiet for a whole LLM call —
+    # a fixed read deadline just kills legitimate work. Hung agent → Ctrl-C.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(None, connect=3.0)) as http:
         cards = await discover(http)
         if not cards:
-            yield "error", "No agents reachable."
+            yield "error", "No agents reachable.", None
             return
         name = choose_agent(query, cards)
         if name is None:
-            yield "error", "No discovered agent fits that request."
+            yield "error", "No discovered agent fits that request.", None
             return
         _url, card = cards[name]
 
@@ -199,11 +226,11 @@ async def route(query: str, resume: str | None = None) -> AsyncIterator[Update]:
         if name == RANKER_NAME:
             jobs = _load_jobs()
             if jobs is None and JOB_SEARCHER_NAME in cards:
-                yield "searching", "No cached jobs — searching first"
+                yield "searching", "No cached jobs — searching first", None
                 jobs = await _collect(http, cards[JOB_SEARCHER_NAME][1], query)
                 if jobs:
                     _cache_jobs(jobs)
-            yield "routing", f"Routed to {name}"
+            yield "routing", f"Routed to {name}", None
             message = _rank_message(query, resume, jobs or "")
             async for update in _send(http, card, message):
                 yield update
@@ -212,14 +239,14 @@ async def route(query: str, resume: str | None = None) -> AsyncIterator[Update]:
         message = query
         if resume and needs_resume(query):
             message = _attach(query, resume)
-            yield "context", "Attached your resume"
-        yield "routing", f"Routed to {name}"
+            yield "context", "Attached your resume", None
+        yield "routing", f"Routed to {name}", None
         # Cache whatever the Job Searcher finds, so a later ranking query can
         # rank against it without re-searching.
-        async for state, text in _send(http, card, message):
+        async for state, text, data in _send(http, card, message):
             if name == JOB_SEARCHER_NAME and state == "completed":
                 _cache_jobs(text)
-            yield state, text
+            yield state, text, data
 
 
 async def _collect(http: httpx.AsyncClient, card: AgentCard, query: str) -> str:
@@ -231,16 +258,34 @@ async def _collect(http: httpx.AsyncClient, card: AgentCard, query: str) -> str:
         query: The text to forward.
     """
     final = ""
-    async for state, text in _send(http, card, query):
+    async for state, text, _data in _send(http, card, query):
         if state == "completed":
             final = text
     return final
 
 
+def _jobs_from(message: Message) -> list[Any] | None:
+    """Pull the structured jobs out of a message's data parts, or None.
+
+    Args:
+        message: The agent message to inspect (its data parts, if any). Data
+            parts are untyped JSON from the SDK, so the dict shape is asserted.
+    """
+    for part in get_data_parts(message.parts):
+        if not isinstance(part, dict):
+            continue
+        jobs = cast("dict[str, Any]", part).get("jobs")
+        if isinstance(jobs, list):
+            return cast("list[Any]", jobs)
+    return None
+
+
 async def _send(
-    http: httpx.AsyncClient, card: AgentCard, query: str
+    http: httpx.AsyncClient,
+    card: AgentCard,
+    query: str,
 ) -> AsyncIterator[Update]:
-    """Stream a discovered agent's task status as (state, text) pairs.
+    """Stream a discovered agent's task status as (state, text, data) triples.
 
     Args:
         http: Async HTTP client (reused from discovery).
@@ -252,14 +297,13 @@ async def _send(
     async for resp in client.send_message(request):
         if resp.HasField("status_update"):
             status = resp.status_update.status
-            text = (
-                get_message_text(status.message) if status.HasField("message") else ""
-            )
-            yield _state_label(status.state), text
+            msg = status.message if status.HasField("message") else None
+            text = get_message_text(msg) if msg else ""
+            yield _state_label(status.state), text, _jobs_from(msg) if msg else None
         elif resp.HasField("message"):
-            yield "completed", get_message_text(resp.message)
+            yield "completed", get_message_text(resp.message), _jobs_from(resp.message)
         elif resp.HasField("task"):
-            yield _state_label(resp.task.status.state), ""
+            yield _state_label(resp.task.status.state), "", None
 
 
 if __name__ == "__main__":

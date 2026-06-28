@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from rich.console import Console
 
-from yahr.agents.job_searcher.models import Job
+from yahr.agents.models.job import Job
 from yahr.config import load_dotenv, openrouter_client
 
 # ponytail: same server-side log as the executor/refiner — shows the structured
