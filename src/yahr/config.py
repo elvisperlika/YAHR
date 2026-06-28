@@ -5,8 +5,15 @@ from pathlib import Path
 
 from openai import OpenAI
 
+from yahr.agents.roster import ADZUNA_MCP_ADDRESS
+
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+
+# Default job-provider MCP server: the Adzuna server's streamable-http endpoint
+# (FastMCP mounts at /mcp). Point YAHR_JOBS_MCP_URL at the mock server's URL to
+# run offline — the Job Searcher is agnostic to which provider sits behind it.
+DEFAULT_JOBS_MCP_URL = f"{ADZUNA_MCP_ADDRESS.url}/mcp"
 
 
 def load_dotenv() -> None:
@@ -44,3 +51,16 @@ def openrouter_client() -> tuple[OpenAI, str]:
     base_url = base_url.rstrip("/").removesuffix("/chat/completions")
     model = os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL)
     return OpenAI(api_key=api_key, base_url=base_url), model
+
+
+def jobs_mcp_url() -> str:
+    """The job-provider MCP server URL the Job Searcher connects to.
+
+    Reads YAHR_JOBS_MCP_URL (loading a local .env first), defaulting to the
+    Adzuna server's endpoint.
+
+    Returns:
+        The streamable-http URL of the job-provider MCP server.
+    """
+    load_dotenv()
+    return os.environ.get("YAHR_JOBS_MCP_URL", DEFAULT_JOBS_MCP_URL)

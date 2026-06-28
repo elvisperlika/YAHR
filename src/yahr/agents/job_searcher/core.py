@@ -4,8 +4,8 @@ A goal-seeking loop: fetch jobs for a query (via a Provider), cache + dedupe the
 and if the goal isn't met yet, broaden the query (see refine.py) and search again
 — until enough jobs are found, the refiner can no longer broaden the query
 (convergence), or a round / API-call budget is hit. The executor only relays whatever this
-yields, so the protocol layer never changes; the job source lives behind the
-Provider interface, so swapping Adzuna for the mock changes nothing here.
+yields, so the protocol layer never changes; the job source lives behind an MCP
+server (MCPProvider), so swapping Adzuna for the mock is just a different URL.
 """
 
 import asyncio
@@ -13,8 +13,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 
 from yahr.agents.models.job import Job
-from yahr.agents.job_searcher.providers import Adzuna, MockProvider, Provider
+from yahr.agents.job_searcher.providers import MCPProvider
 from yahr.agents.job_searcher.refine import refine
+from yahr.config import jobs_mcp_url
+from yahr.mcp.mock import mock_jobs
 
 # A unit of work the executor relays: (text, is_final, jobs). Progress steps carry
 # is_final=False and jobs=None; the single final step (is_final=True) carries the
@@ -40,18 +42,15 @@ class Goal:
     max_calls: int = 3
 
 
-# Seams: the job source (a Provider's search) and the refiner, both swappable so
-# the loop can be checked offline (see __main__).
+# Seams: the job source (an MCP provider's search) and the refiner, both swappable
+# so the loop can be checked offline (see __main__).
 Fetch = Callable[[str], Awaitable[list[Job]]]
 Refiner = Callable[[str, int, int], str]
 
 
-def _select_provider() -> Provider:
-    """The real provider when its credentials are set, else the offline mock."""
-    try:
-        return Adzuna.from_env()
-    except Exception:
-        return MockProvider()
+def _select_provider() -> MCPProvider:
+    """The job-provider MCP server the agent talks to (its URL decides the source)."""
+    return MCPProvider(jobs_mcp_url())
 
 
 def _job_md(job: Job) -> str:
@@ -89,14 +88,14 @@ def _render(cache: dict[str, Job]) -> str:
 
 async def _run(
     goal: Goal,
-    fetch: Fetch = MockProvider().search,
+    fetch: Fetch = mock_jobs,
     refiner: Refiner = refine,
 ) -> AsyncIterator[Step]:
     """Drive the goal-seeking search loop, streaming progress then a final result.
 
     Args:
         goal: The target and budget for this search.
-        fetch: The job source (a Provider's search; defaults to the mock, injected in tests).
+        fetch: The job source (an MCP provider's search; defaults to the in-process mock for tests).
         refiner: The query refiner (defaults to refine; injected in tests).
 
     Yields:
@@ -200,6 +199,11 @@ if __name__ == "__main__":
         assert "### Dev" in full and "**Acme · Milano**" in full
         assert "Spring" in full and "[Apply](http://x/1)" in full
         assert _job_md(Job("2", "Solo")) == "### Solo"
+
+        # The default fetch (the in-process async mock) must actually be awaitable
+        # — the loop awaits it, so a sync default would only blow up here.
+        default = [s async for s in _run(Goal("dev", target=3))]
+        assert shape(default) and "jobs found" in default[-1][0], default
 
         print("job_searcher.core self-check ok")
 

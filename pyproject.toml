@@ -10,6 +10,7 @@ dependencies = [
     "rich",
     "markitdown==0.0.2",
     "a2a-sdk[http-server]",
+    "mcp",
     "openai",
     "httpx",
     "uvicorn",

@@ -38,6 +38,12 @@ RANKER_NAME = "Ranker Agent"
 JOB_SEARCHER_ADDRESS = AgentAddress("127.0.0.1", 8002)
 RANKER_ADDRESS = AgentAddress("127.0.0.1", 8003)
 
+# Job-provider MCP servers. These are MCP servers, not A2A agents — the Job
+# Searcher reaches them as an MCP client, so they stay OUT of AGENT_URLS (the
+# Orchestrator must never discover them as routing candidates).
+ADZUNA_MCP_ADDRESS = AgentAddress("127.0.0.1", 8005)
+MOCK_MCP_ADDRESS = AgentAddress("127.0.0.1", 8006)
+
 # Base URLs the Orchestrator probes for agent cards. Only running agents that
 # actually serve a card are discovered and become routing candidates; add
 # endpoints here as more agents come online.

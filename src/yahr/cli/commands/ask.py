@@ -18,9 +18,14 @@ def _job_card(job: dict[str, str]) -> Panel:
     Args:
         job: A job dict (title plus optional company/location/description/url).
     """
-    meta = " · ".join(
-        p for p in (job.get("company"), job.get("location"), job.get("salary")) if p
-    )
+    parts: list[str] = []
+    if company := job.get("company"):
+        parts.append(company)
+    if location := job.get("location"):
+        parts.append(location)
+    if salary := job.get("salary"):
+        parts.append(f"[green]{salary}[/]")
+    meta = " · ".join(parts)
     body: list[str] = []
     if meta:
         body.append(f"[bold]{meta}[/]")
