@@ -236,6 +236,27 @@ def _json_object(text: str) -> dict[str, Any]:
     return json.loads(text[start : end + 1])
 
 
+def _salary(result: dict[str, Any]) -> str:
+    """Format an Adzuna entry's salary range as a RAL string, or "" if it has none.
+
+    Args:
+        result: One Adzuna /search result (may carry salary_min / salary_max).
+
+    Returns:
+        "€min–€max", or "€amount" when min == max, or "" when neither is present.
+    """
+    nums = [
+        int(n)
+        for n in (result.get("salary_min"), result.get("salary_max"))
+        if isinstance(n, (int, float))
+    ]
+    if not nums:
+        return ""
+    lo, hi = min(nums), max(nums)
+    # ponytail: € assumes the default 'it'/EUR scope; map per-country if it widens.
+    return f"€{lo:,}" if lo == hi else f"€{lo:,}–€{hi:,}"
+
+
 def _parse(payload: dict[str, Any]) -> list[Job]:
     """Map an Adzuna search response into Jobs, skipping entries missing id or title.
 
@@ -259,6 +280,7 @@ def _parse(payload: dict[str, Any]) -> list[Job]:
                 location=str(location.get("display_name", "")),
                 description=str(result.get("description", "")),
                 url=str(result.get("redirect_url", "")),
+                salary=_salary(result),
             )
         )
     return jobs
@@ -278,6 +300,8 @@ if __name__ == "__main__":
                 "redirect_url": "https://adzuna.example/123",
                 "company": {"display_name": "Acme"},
                 "location": {"display_name": "Milano"},
+                "salary_min": 30000,
+                "salary_max": 45000.0,
             },
             {"id": None, "title": "No id"},  # skipped
             {"title": "Missing id"},  # skipped
@@ -290,7 +314,14 @@ if __name__ == "__main__":
     java = parsed[0]
     assert java.company == "Acme" and java.location == "Milano", java
     assert java.description == "Spring, JPA" and java.url.endswith("/123"), java
+    assert java.salary == "€30,000–€45,000", java  # range, ints + floats
     assert parsed[1].company == "" and parsed[1].location == "", parsed[1]  # null -> ""
+    assert parsed[1].salary == "", parsed[1]  # no salary fields -> ""
+
+    # _salary: range, single value (min == max), and absent.
+    assert _salary({"salary_min": 30000, "salary_max": 30000}) == "€30,000"
+    assert _salary({"salary_max": 50000}) == "€50,000"  # one bound is enough
+    assert _salary({}) == ""
 
     mock = asyncio.run(MockProvider().search("python dev"))
     assert len(mock) == 5 and all(isinstance(j, Job) for j in mock)

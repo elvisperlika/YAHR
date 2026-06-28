@@ -14,6 +14,8 @@ class Job:
         location: Human-readable location ("" if omitted).
         description: Posting body — the main signal the ranker scores against.
         url: Link to the full listing (Adzuna redirect_url), to apply.
+        salary: Pre-formatted gross annual pay (RAL), e.g. "€30,000–€45,000"
+            ("" when Adzuna lists none).
     """
 
     id: str
@@ -23,5 +25,6 @@ class Job:
     location: str = ""
     description: str = ""
     url: str = ""
-    # ponytail: salary_min/max, contract_time/type, category, created also exist
-    # in the API — add them here when the ranker or display actually reads them.
+    salary: str = ""
+    # ponytail: contract_time/type, category, created also exist in the API —
+    # add them here when the ranker or display actually reads them.

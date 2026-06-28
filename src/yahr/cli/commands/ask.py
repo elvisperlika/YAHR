@@ -12,14 +12,16 @@ from yahr.agents import orchestrator
 console = Console()
 
 
-def _job_card(job: dict) -> Panel:
+def _job_card(job: dict[str, str]) -> Panel:
     """Render one job as a boxed card with every field it has.
 
     Args:
         job: A job dict (title plus optional company/location/description/url).
     """
-    meta = " · ".join(p for p in (job.get("company"), job.get("location")) if p)
-    body = []
+    meta = " · ".join(
+        p for p in (job.get("company"), job.get("location"), job.get("salary")) if p
+    )
+    body: list[str] = []
     if meta:
         body.append(f"[bold]{meta}[/]")
     if job.get("description"):
@@ -35,7 +37,7 @@ def _job_card(job: dict) -> Panel:
     )
 
 
-def _job_cards(jobs: list[dict]) -> RenderableType:
+def _job_cards(jobs: list[dict[str, str]]) -> RenderableType:
     """Stack the found jobs as boxed cards under a count header.
 
     Args:

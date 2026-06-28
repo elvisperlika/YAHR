@@ -35,7 +35,7 @@ class Goal:
     """
 
     query: str
-    target: int = 10
+    target: int = 5
     max_rounds: int = 3
     max_calls: int = 3
 
@@ -62,7 +62,7 @@ def _job_md(job: Job) -> str:
             a sparse mock job (title only) renders cleanly too.
     """
     parts = [f"### {job.title}"]
-    meta = " · ".join(p for p in (job.company, job.location) if p)
+    meta = " · ".join(p for p in (job.company, job.location, job.salary) if p)
     if meta:
         parts.append(f"**{meta}**")
     if job.description:
