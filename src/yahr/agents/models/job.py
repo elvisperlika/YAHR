@@ -14,7 +14,7 @@ class Job:
         location: Human-readable location ("" if omitted).
         description: Posting body — the main signal the ranker scores against.
         url: Link to the full listing (Adzuna redirect_url), to apply.
-        salary: Pre-formatted gross annual pay (RAL), e.g. "€30,000–€45,000"
+        salary: Pre-formatted gross annual pay (RAL), e.g. "€30,000-€45,000"
             ("" when Adzuna lists none).
     """
 

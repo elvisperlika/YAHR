@@ -2,7 +2,7 @@
 
 ![YAHR](docs/image/logo.png)
 
-**Yet Another HR** — a command-line career co-pilot. From a resume PDF it parses a structured profile, searches job listings, scores them against the profile, and suggests resume improvements. It is built on the [A2A](https://a2a-protocol.org/) protocol: specialized agents behind a single LLM-routing orchestrator.
+**Yet Another HR**: a command-line career co-pilot. From a resume PDF it parses a structured profile, searches job listings, scores them against the profile, and suggests resume improvements. It is built on the [A2A](https://a2a-protocol.org/) protocol: specialized agents behind a single LLM-routing orchestrator. Job boards sit behind [MCP](https://modelcontextprotocol.io/): the Job Searcher calls one generic `search` tool, so a provider is a server URL, not agent code.
 
 ## Getting Started
 
@@ -32,13 +32,22 @@ OPENROUTER_MODEL=google/gemma-4-31b-it:free
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-The Job Searcher queries [Adzuna](https://developer.adzuna.com/) for real listings. Set your credentials to enable it; without them it falls back to canned jobs, so the rest of the pipeline still runs offline:
+The Job Searcher does not call a job board directly. It connects to a job-provider MCP server that exposes a generic `search` tool, so the same agent works against any provider. Two servers ship with YAHR: an Adzuna server ([adzuna-mcp](https://developer.adzuna.com/)) that returns real listings, and a mock server (`mock-mcp`) that returns canned jobs offline. The searcher connects to whatever `YAHR_JOBS_MCP_URL` points at, defaulting to the Adzuna server.
+
+Adzuna needs credentials. Set them to get real listings:
 
 ```bash
-# .env (optional — omit to use canned jobs)
+# .env
 ADZUNA_APP_ID=...
 ADZUNA_APP_KEY=...
 ADZUNA_COUNTRY=it   # two-letter country code, default 'it'
+```
+
+No credentials? Point the searcher at the mock server instead and run that one (next section):
+
+```bash
+# .env
+YAHR_JOBS_MCP_URL=http://127.0.0.1:8006/mcp
 ```
 
 ## Commands
@@ -46,13 +55,18 @@ ADZUNA_COUNTRY=it   # two-letter country code, default 'it'
 | Command | What it does |
 | --- | --- |
 | `yahr convert <resume.pdf>` | Convert a PDF resume to clean Markdown at `output/<name>.md` — one LLM pass repairs reading order and structure. |
-| `yahr serve [agent]` | Run an agent as an A2A HTTP server. Built agents: `job-searcher` (default, on `127.0.0.1:8002`) and `ranker` (`8003`). |
+| `yahr serve [name]` | Run an A2A agent or a job-provider MCP server. A2A agents: `job-searcher` (default, `127.0.0.1:8002`), `ranker` (`8003`). MCP providers: `adzuna-mcp` (`8005`), `mock-mcp` (`8006`). |
 | `yahr ask "<query>"` | Route a natural-language query to the best running agent and stream its progress live. |
 | `yahr hello [--name X]` | Sanity-check that the CLI is installed. |
 
 ### Try it
 
-`ask` only routes to agents that are actually running and serving an Agent Card, so start one first. In different terminals run:
+`ask` only routes to agents that are actually running and serving an Agent Card, so start one first. The Job Searcher also needs a job-provider MCP server up, since that is where it gets its listings. In different terminals run:
+
+```bash
+# Start a job-provider MCP server (Adzuna; swap for mock-mcp to run offline)
+yahr serve adzuna-mcp
+```
 
 ```bash
 # Start the Job Searcher agent

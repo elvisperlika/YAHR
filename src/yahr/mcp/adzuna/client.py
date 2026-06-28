@@ -75,7 +75,7 @@ def _salary(result: dict[str, Any]) -> str:
         result: One Adzuna /search result (may carry salary_min / salary_max).
 
     Returns:
-        "€min–€max", or "€amount" when min == max, or "" when neither is present.
+        "€min-€max", or "€amount" when min == max, or "" when neither is present.
     """
     nums = [
         int(n)
@@ -86,7 +86,7 @@ def _salary(result: dict[str, Any]) -> str:
         return ""
     lo, hi = min(nums), max(nums)
     # ponytail: € assumes the default 'it'/EUR scope; map per-country if it widens.
-    return f"€{lo:,}" if lo == hi else f"€{lo:,}–€{hi:,}"
+    return f"€{lo:,}" if lo == hi else f"€{lo:,}-€{hi:,}"
 
 
 def _parse(payload: dict[str, Any]) -> list[Job]:
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     java = parsed[0]
     assert java.company == "Acme" and java.location == "Milano", java
     assert java.description == "Spring, JPA" and java.url.endswith("/123"), java
-    assert java.salary == "€30,000–€45,000", java  # range, ints + floats
+    assert java.salary == "€30,000-€45,000", java  # range, ints + floats
     assert parsed[1].company == "" and parsed[1].location == "", parsed[1]  # null -> ""
     assert parsed[1].salary == "", parsed[1]  # no salary fields -> ""
 
