@@ -9,7 +9,7 @@ DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "google/gemma-4-31b-it:free"
 
 
-def _load_dotenv() -> None:
+def load_dotenv() -> None:
     """Load KEY=VALUE pairs from a local .env into os.environ if present."""
     # ponytail: tiny .env loader, swap for python-dotenv if config grows.
     env = Path(".env")
@@ -32,7 +32,7 @@ def openrouter_client() -> tuple[OpenAI, str]:
     Returns:
         A (client, model) tuple ready for chat.completions.create.
     """
-    _load_dotenv()
+    load_dotenv()
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError(

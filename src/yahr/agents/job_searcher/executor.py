@@ -7,8 +7,13 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import TaskState
+from rich.console import Console
 
 from yahr.agents.job_searcher import core
+
+# ponytail: this agent's own server-side log (its process, not the CLI client).
+# console.log adds a timestamp — what you want when tailing a running agent.
+console = Console()
 
 
 class JobSearcherExecutor(AgentExecutor):
@@ -30,11 +35,14 @@ class JobSearcherExecutor(AgentExecutor):
             )
         updater = TaskUpdater(event_queue, task_id, context_id)
 
+        console.log(f"[bold cyan]search[/] {query!r}")
         await updater.start_work()
         async for text, is_final in core.search(query):
             if is_final:
+                console.log(f"[bold green]done[/] {text.splitlines()[0]}")
                 await updater.complete(updater.new_agent_message([new_text_part(text)]))
             else:
+                console.log(f"  [dim]·[/] {text}")
                 await updater.update_status(
                     TaskState.TASK_STATE_WORKING,
                     updater.new_agent_message([new_text_part(text + "…")]),
