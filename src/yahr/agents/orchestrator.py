@@ -26,6 +26,12 @@ Update = tuple[str, str, Any]
 # A discovered agent: its name -> (base url, fetched card).
 Discovered = dict[str, tuple[str, AgentCard]]
 
+# ponytail: routing and the resume decision are classifications — pin them greedy
+# + seeded so the same query routes the same way every run (mirrors ranker.core).
+# Best-effort: the provider must honour the seed. Any constant seed works.
+_TEMPERATURE = 0
+_SEED = 7
+
 
 async def discover(http: httpx.AsyncClient) -> Discovered:
     """Fetch the Agent Card from each configured endpoint (A2A discovery).
@@ -84,6 +90,8 @@ def choose_agent(query: str, cards: Discovered) -> str | None:
             {"role": "system", "content": _routing_prompt(cards)},
             {"role": "user", "content": query},
         ],
+        temperature=_TEMPERATURE,
+        seed=_SEED,
     )
     return _validate(reply.choices[0].message.content, cards)
 
@@ -128,6 +136,8 @@ def needs_resume(query: str) -> bool:
             },
             {"role": "user", "content": query},
         ],
+        temperature=_TEMPERATURE,
+        seed=_SEED,
     )
     return (reply.choices[0].message.content or "").strip().lower().startswith("y")
 
@@ -325,4 +335,29 @@ if __name__ == "__main__":
     assert "Question: best fit?" in bundle
     assert "- Job A" in bundle and "# CV\nElvis" in bundle
     assert "Resume" not in _rank_message("best fit?", None, "- Job A")
+
+    # ponytail: guard the routing calls' idempotency wiring — both LLM calls
+    # (agent choice + resume decision) must go out greedy + seeded. The faked
+    # client records the outbound kwargs; real determinism still needs the
+    # provider to honour the seed.
+    from types import SimpleNamespace
+
+    routed: list[dict[str, object]] = []
+
+    def _fake_client() -> tuple[SimpleNamespace, str]:
+        def create(**kwargs: object) -> SimpleNamespace:
+            routed.append(kwargs)
+            msg = SimpleNamespace(content="Job Searcher Agent")
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
+        chat = SimpleNamespace(completions=SimpleNamespace(create=create))
+        return SimpleNamespace(chat=chat), "fake-model"
+
+    openrouter_client = _fake_client  # type: ignore[assignment]
+
+    assert choose_agent("find java jobs", fake) == "Job Searcher Agent"
+    needs_resume("tailor my resume to these jobs")
+    assert len(routed) == 2, routed
+    assert all(c["temperature"] == 0 and c["seed"] == _SEED for c in routed), routed
+
     print("orchestrator self-check ok")

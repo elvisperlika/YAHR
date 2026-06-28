@@ -14,6 +14,7 @@ import asyncio
 from dataclasses import replace
 from typing import cast
 
+import requests
 from markitdown import MarkItDown
 from rich.console import Console
 
@@ -22,9 +23,16 @@ from yahr.config import openrouter_client
 
 console = Console()
 
-# ponytail: one shared converter; markitdown is sync (requests under the hood),
-# so each fetch runs in a thread and they all go concurrently via gather.
-_md = MarkItDown()
+# ponytail: requests' default User-Agent ("python-requests/…") gets 403'd by
+# Adzuna's redirect/land pages and many employer sites — a browser UA clears most
+# of them. markitdown is sync (requests under the hood), so each fetch runs in a
+# thread and they all go concurrently via gather.
+_session = requests.Session()
+_session.headers["User-Agent"] = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+_md = MarkItDown(requests_session=_session)
 
 # ponytail: per-job ceiling (fetch + one LLM pass) so one slow posting can't
 # stall the whole search. The to_thread keeps running after a timeout (asyncio

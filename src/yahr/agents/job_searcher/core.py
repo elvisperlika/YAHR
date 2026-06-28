@@ -9,8 +9,9 @@ server (MCPProvider), so swapping Adzuna for the mock is just a different URL.
 """
 
 import asyncio
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from yahr.agents.models.job import Job
 from yahr.agents.job_searcher.providers import MCPProvider
@@ -31,7 +32,8 @@ class Goal:
 
     Attributes:
         query: The starting job query.
-        target: Stop once this many distinct jobs are cached.
+        target: How many jobs to return: the search stops once this many distinct
+            jobs are cached, and the final result is capped to it.
         max_rounds: Hard cap on search rounds (spin guard).
         max_calls: Hard cap on fetch calls (budget guard for a paid/rate-limited API).
     """
@@ -46,6 +48,21 @@ class Goal:
 # so the loop can be checked offline (see __main__).
 Fetch = Callable[[str], Awaitable[list[Job]]]
 Refiner = Callable[[str, int, int], str]
+
+# ponytail: pull a small "find N jobs" / "top N jobs" count out of the query — a
+# 1-2 digit number sitting before the word "job(s)". Word-numbers ("three"),
+# years, and "positions"/"roles" are a known miss; the default target applies then.
+_COUNT_RE = re.compile(r"\b(\d{1,2})\b(?=[^\d]*\bjobs?\b)", re.IGNORECASE)
+
+
+def _requested_count(query: str) -> int | None:
+    """The job count the query asks for (e.g. 3 in "find 3 java jobs"), or None.
+
+    Args:
+        query: The natural-language job query.
+    """
+    match = _COUNT_RE.search(query)
+    return int(match.group(1)) if match else None
 
 
 def _select_provider() -> MCPProvider:
@@ -112,7 +129,10 @@ async def _run(
         for job in await fetch(query):
             cache.setdefault(job.id, job)
         calls += 1
-        yield f"{query!r}: +{len(cache) - before} (total {len(cache)})", False, None
+        # Report progress against the cap, not the raw page: a 20-result page for
+        # a "find 3" search reads as "+3 (total 3)", matching the final result.
+        was, now = min(before, goal.target), min(len(cache), goal.target)
+        yield f"{query!r}: +{now - was} (total {now})", False, None
         if len(cache) >= goal.target:  # goal met
             break
         # Broaden even when this round found nothing — an empty result is the
@@ -122,11 +142,17 @@ async def _run(
         if next_query == query:
             break
         query = next_query
-    yield _render(cache), True, list(cache.values())
+    # Cap to the requested count (the goal's target): a single Adzuna page
+    # over-fetches (20), so honour "find 3 jobs" by keeping only the first N.
+    selected = dict(list(cache.items())[: goal.target])
+    yield _render(selected), True, list(selected.values())
 
 
 async def search(query: str) -> AsyncIterator[Step]:
     """Search for jobs matching a query, streaming progress then a final result.
+
+    A "find N jobs" / "top N jobs" count in the query sets how many to return
+    (and to search for); otherwise the default target applies.
 
     Args:
         query: The natural-language job query.
@@ -134,7 +160,10 @@ async def search(query: str) -> AsyncIterator[Step]:
     Yields:
         (text, is_final) steps from the goal-seeking loop with default budget.
     """
-    async for step in _run(Goal(query=query), _select_provider().search):
+    goal = Goal(query=query)
+    if count := _requested_count(query):
+        goal = replace(goal, target=count)
+    async for step in _run(goal, _select_provider().search):
         yield step
 
 
@@ -177,13 +206,32 @@ if __name__ == "__main__":
         broadened = [
             s async for s in _run(Goal("forli", target=2), empty_first, changing)
         ]
-        assert shape(broadened) and "3 jobs" in broadened[-1][0], broadened[-1][0]
+        # Broadened (cache went 0 -> 3) then capped to the target of 2.
+        assert shape(broadened) and "2 jobs" in broadened[-1][0], broadened[-1][0]
 
         # Budget: max_calls caps fetches regardless of target/rounds.
         cap = [
             s async for s in _run(Goal("dev", target=99, max_calls=2), fetch, changing)
         ]
         assert shape(cap) and "4 jobs" in cap[-1][0], cap[-1][0]
+
+        # The requested count caps the result (the "find 3 jobs" bug): one Adzuna
+        # page is 20, trimmed to the 3 asked for — in text and in structured jobs.
+        async def twenty(q: str) -> list[Job]:
+            return [Job(id=f"{q}-{i}", title=q) for i in range(20)]
+
+        capped = [s async for s in _run(Goal("java", target=3), twenty, changing)]
+        assert shape(capped) and "3 jobs" in capped[-1][0], capped[-1][0]
+        assert len(capped[-1][2] or []) == 3, capped[-1][2]
+        # The progress line reports against the cap too, not the raw page of 20.
+        assert "+3 (total 3)" in capped[0][0] and "20" not in capped[0][0], capped[0][0]
+
+        # _requested_count: a 1-2 digit number before "jobs" wins, else None.
+        assert _requested_count("find 3 java developer jobs in milano") == 3
+        assert _requested_count("top 5 python jobs") == 5
+        assert _requested_count("find java jobs") is None
+        assert _requested_count("java jobs over 50k") is None  # 50 is after "jobs"
+        assert _requested_count("software roles in 2024") is None  # year, not a count
 
         # A full job renders every field; a sparse (title-only) job stays clean.
         full = _job_md(
