@@ -37,25 +37,21 @@ model {
       technology 'Python · Typer · Rich'
 
       convertCmd = command 'convert' {
-        description 'Converts a PDF resume to Markdown, written to output/<stem>.md.'
-        technology 'markitdown'
+        description 'Converts a PDF resume to Markdown in output/<stem>.md: markitdown extracts the raw text, then one OpenRouter LLM pass repairs the reading order, drops glyph artifacts, and applies Markdown structure.'
+        technology 'markitdown · OpenRouter'
       }
 
       serveAgentCmd = command 'serve' {
-        description 'Runs any registered A2A agent as an HTTP server (AGENT arg, default resume-builder; --host/--port; --list to show all serveable agents).'
-      }
-
-      serveAllCmd = command 'serve-all' {
-        description 'Serves every YAHR agent at once, each on its default port, by spawning one `serve` subprocess per agent and forwarding their logs in a colour-tagged gutter until Ctrl-C; if any agent exits, the rest are shut down too.'
-        technology 'subprocess · threading'
+        description 'Runs one A2A agent (job-searcher, ranker, cv-assistant) or job-provider MCP server (adzuna-mcp, mock-mcp) until Ctrl-C. The AGENT arg defaults to job-searcher; an unknown name lists the available servers and exits non-zero.'
       }
 
       helloCmd = command 'hello' {
-        description 'Prints a friendly greeting.'
+        description 'Prints a welcome panel.'
+        technology 'Rich'
       }
 
-      matchCmd = command 'match' {
-        description 'Ranks jobs against the resume via the running orchestrator agent (--url, default 127.0.0.1:8004; --what / --where / --limit / --with-salary shape the search). Renders the ranked jobs (score, title, company, reasoning) as a Rich table, and saves the rankings as JSON with --output. (The orchestrator also defines a refinement loop; only the ranking phase is wired into the CLI so far.)'
+      askCmd = command 'ask' {
+        description 'Routes a natural-language query to the best running agent through the orchestrator, streams the task status as it arrives, and renders the result: found jobs as cards, any other agent reply as Markdown. Attaches output/resume.md when the file exists, and lets the orchestrator decide per query whether to use it.'
         technology 'a2a-sdk client · httpx'
       }
 
@@ -64,16 +60,18 @@ model {
 
   // How the user reaches each command from the terminal.
   user -> cli.convertCmd 'yahr convert cv.pdf'
-  user -> cli.serveAgentCmd 'yahr serve resume-builder'
-  user -> cli.serveAllCmd 'yahr serve-all'
+  user -> cli.serveAgentCmd 'yahr serve job-searcher'
   user -> cli.helloCmd 'yahr hello'
-  user -> cli.matchCmd 'yahr match resume.md --what "python developer"'
-  cli.serveAllCmd -> cli.serveAgentCmd 'spawns one `serve` subprocess per agent'
+  user -> cli.askCmd 'yahr ask "python developer jobs in milano"'
+
+  // The resume file (defined in YAHR.c4 inside the yahr system) the CLI touches.
+  cli.convertCmd -> yahr.resumeFile 'Writes output/<stem>.md'
+  cli.askCmd -> yahr.resumeFile 'Reads the resume to attach (if present)'
 }
 
 views {
   view cliInterface of cli {
-    title 'YAHR CLI — Commands'
+    title 'YAHR CLI: Commands'
 
     include *
 

@@ -11,6 +11,12 @@ specification {
       color green
     }
   }
+  element mcpServer {
+    style {
+      shape rectangle
+      color indigo
+    }
+  }
   element externalSystem {
     style {
       color secondary
@@ -26,47 +32,45 @@ model {
   yahr = system 'YAHR' {
     description 'Personal HR assistant CLI: parses a resume PDF, searches for matching jobs, and suggests resume improvements.'
 
-    // The `cli` container is defined in CLI.c4 (extend yahr). The A2A agents
-    // that the CLI orchestrates are defined here.
+    // The `cli` container is defined in CLI.c4 (extend yahr). The A2A agents and
+    // the job-provider MCP servers the CLI orchestrates are defined here.
 
     orchestrator = agent 'Orchestrator Agent' {
-      description 'Coordinates the agents over A2A in two phases: first it ranks the resume against the searched jobs; then, for a job the user picks, it drives an iterative loop that rewrites the weakest section of the resume and re-ranks until the score plateaus or a round cap is hit. (planned)'
-      technology 'A2A'
-    }
-
-    resumeBuilder = agent 'Resume Parser Agent' {
-      description 'Turns resume Markdown into a structured Resume via an OpenRouter-hosted LLM.'
-      technology 'A2A, OpenAI client, Starlette/uvicorn'
+      description 'Routes each query to the best agent: it discovers the running agents over A2A by fetching their Agent Cards, asks an LLM which one fits, forwards the message, and streams the result back. It caches the found jobs and the attached resume between runs so a ranking query can reuse them. The CLI runs it in-process today; the standalone served Orchestrator on its own port is still planned.'
+      technology 'A2A client, OpenAI client, httpx'
     }
 
     jobSearcher = agent 'Job Searcher Agent' {
-      description 'Discovers open positions via a job board API (Adzuna), then enriches each posting.'
-      technology 'A2A, httpx, markitdown, OpenAI client'
+      description 'Searches a job-provider MCP server (Adzuna or the offline mock) for open positions matching a natural-language query, deduping the results and broadening the query over a few rounds until it has enough or hits its call budget.'
+      technology 'A2A, MCP client, Starlette/uvicorn'
     }
 
-    ranker = agent 'Matching / Ranker Agent' {
-      description 'Scores each open position against the structured profile (0-100) and flags per-section gaps (skills / work experience / projects) the orchestrator targets when rewriting. (planned)'
-      technology 'A2A, LLM'
+    ranker = agent 'Ranker Agent' {
+      description 'Scores each found job against the resume (0-100), ranks them best first, and answers which fit and why. Pinned to greedy, seeded sampling so the same input ranks the same way every run.'
+      technology 'A2A, OpenAI client, Starlette/uvicorn'
     }
 
-    summaryAssistant = agent 'Summary Assistant Agent' {
-      description 'Crafts a concise resume summary emphasizing the candidate’s unique value proposition and fit for the target job, using only facts already present in the resume — it never invents experience. (planned)'
-      technology 'A2A, LLM'
+    cvAssistant = agent 'CV Assistant Agent' {
+      description 'Analyzes the gap between the resume and one job the user names, then suggests concrete ways to strengthen the resume for it: missing skills, keywords to add, bullets to reword or quantify. Advisory only; it may flag skills the resume lacks, but it does not rewrite the resume.'
+      technology 'A2A, OpenAI client, Starlette/uvicorn'
     }
 
-    skillsAssistant = agent 'Skills Assistant Agent' {
-      description 'Rewrites the skills section to surface skills relevant to the chosen job, using only facts already present in the resume — it never invents experience. (planned)'
-      technology 'A2A, LLM'
+    adzunaMcp = mcpServer 'Adzuna MCP Server' {
+      description 'Wraps the Adzuna job board behind a generic search(query) tool over MCP. Fetches matching postings, then enriches each by retrieving its listing page for the full description.'
+      technology 'MCP (FastMCP), httpx'
     }
 
-    experienceAssistant = agent 'Experience Assistant Agent' {
-      description 'Reframes work-experience descriptions toward the chosen job, using only facts already present in the resume — it never invents experience. (planned)'
-      technology 'A2A, LLM'
+    mockMcp = mcpServer 'Mock MCP Server' {
+      description 'Serves canned jobs through the same search(query) tool as Adzuna, so the pipeline can run offline without credentials.'
+      technology 'MCP (FastMCP)'
     }
 
-    projectsAssistant = agent 'Projects Assistant Agent' {
-      description 'Reframes project descriptions toward the chosen job, using only facts already present in the resume — it never invents experience. (planned)'
-      technology 'A2A, LLM'
+    resumeFile = file 'output/resume.md' {
+      description 'The converted resume in Markdown, used as shared memory: convert writes it, ask reads it to attach, and the orchestrator caches and reuses it across runs.'
+    }
+
+    jobsFile = file 'output/jobs.md' {
+      description 'The orchestrator cache of the last job search, so a ranking or improvement query reuses those jobs instead of searching again.'
     }
   }
 
@@ -74,8 +78,8 @@ model {
     description 'LLM gateway (OpenAI-compatible API) for LLM reasoning.'
   }
 
-  jobApis = externalSystem 'Job Board APIs' {
-    description 'External job listing providers queried for open positions matching the candidate profile.'
+  jobApis = externalSystem 'Job Board API (Adzuna)' {
+    description 'External job listing provider; the Adzuna MCP server queries it for open positions and fetches the listing pages.'
   }
 
   // System Context relationships
@@ -84,29 +88,27 @@ model {
   yahr -> jobApis 'Fetches open job listings from (HTTPS)'
 
   // Container relationships (cli is defined in CLI.c4)
-  yahr.cli -> orchestrator 'Starts the workflow (A2A)'
+  yahr.cli -> orchestrator 'Runs the orchestrator for each `ask` query'
 
-  orchestrator -> resumeBuilder 'Requests structured resume parsing (A2A)'
   orchestrator -> jobSearcher 'Requests matching jobs (A2A)'
   orchestrator -> ranker 'Requests job scoring (A2A)'
-  orchestrator -> skillsAssistant 'Routes the skills section for rewriting (A2A)'
-  orchestrator -> experienceAssistant 'Routes the work-experience section for rewriting (A2A)'
-  orchestrator -> projectsAssistant 'Routes the projects section for rewriting (A2A)'
-  orchestrator -> summaryAssistant 'Routes the summary section for rewriting (A2A)'
+  orchestrator -> cvAssistant 'Requests resume-gap analysis (A2A)'
 
-  resumeBuilder -> openrouter 'Extracts structured Resume via LLM (HTTPS / JSON)'
-  jobSearcher -> jobApis 'Searches for open positions & fetches listing pages (HTTPS)'
-  jobSearcher -> openrouter 'Parses each listing page into structured JobDetails via LLM (HTTPS / JSON)'
+  orchestrator -> openrouter 'Picks the best agent for each query via LLM (HTTPS / JSON)'
+  jobSearcher -> adzunaMcp 'Searches jobs via the search tool (MCP)'
+  jobSearcher -> mockMcp 'Offline alternative for the same search tool (MCP)'
+  adzunaMcp -> jobApis 'Searches Adzuna & fetches listing pages (HTTPS)'
   ranker -> openrouter 'Scores jobs against the profile (HTTPS / JSON)'
-  summaryAssistant -> openrouter 'Rewrites the summary section via LLM (HTTPS / JSON)'
-  skillsAssistant -> openrouter 'Rewrites the skills section via LLM (HTTPS / JSON)'
-  experienceAssistant -> openrouter 'Rewrites the work-experience section via LLM (HTTPS / JSON)'
-  projectsAssistant -> openrouter 'Rewrites the projects section via LLM (HTTPS / JSON)'
+  cvAssistant -> openrouter 'Analyzes the resume gap via LLM (HTTPS / JSON)'
+
+  // Local files the system uses as memory between runs.
+  orchestrator -> jobsFile 'Caches the found jobs, reloads them next run (read/write)'
+  orchestrator -> resumeFile 'Caches and reuses the attached resume (read/write)'
 }
 
 views {
   view index {
-    title 'YAHR — System Context'
+    title 'YAHR: System Context'
 
     include user, yahr, openrouter, jobApis
 
@@ -114,7 +116,7 @@ views {
   }
 
   view containers of yahr {
-    title 'YAHR — Containers'
+    title 'YAHR: Containers'
 
     include *
 

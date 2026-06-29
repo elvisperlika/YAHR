@@ -1,75 +1,103 @@
 views {
   dynamic view pipeline {
-    title 'YAHR — Pipeline'
+    title 'YAHR: Ask Pipeline'
+    description '''
+      One `ask` query, end to end. The CLI runs the orchestrator in-process: it
+      discovers the running agents over A2A, asks the LLM which one fits, forwards
+      the query, and streams the result back. Shown here for a plain job search;
+      a ranking or resume-gap query routes to the ranker or CV Assistant instead
+      and reuses the jobs the searcher cached (see the sequence view).
+    '''
 
+    yahr.cli -> yahr.orchestrator 'ask "<query>" (attaches output/resume.md if present)'
+
+    // Discover the running agents by fetching their Agent Cards.
     parallel {
-      yahr.orchestrator -> yahr.resumeBuilder 'Requests structured resume parsing (A2A)'
-      yahr.orchestrator -> yahr.jobSearcher 'Requests matching jobs (A2A)'
+      yahr.orchestrator -> yahr.jobSearcher 'GET agent card (A2A)'
+      yahr.orchestrator -> yahr.ranker 'GET agent card (A2A)'
+      yahr.orchestrator -> yahr.cvAssistant 'GET agent card (A2A)'
     }
 
-    parallel {
-      yahr.resumeBuilder -> yahr.ranker 'Sends structured resume for scoring (A2A)'
-      yahr.jobSearcher -> yahr.ranker 'Sends structured job postings for scoring (A2A)'
-    }
-
-    yahr.ranker -> yahr.orchestrator 'Returns ranked jobs + per-section gaps (A2A)'
-
-    // The orchestrator routes the weakest section to its assistant each round;
-    // all four section rewriters are shown here for completeness.
-    parallel {
-      yahr.orchestrator -> yahr.summaryAssistant 'Rewrite the summary section (A2A)'
-      yahr.orchestrator -> yahr.skillsAssistant 'Rewrite the skills section (A2A)'
-      yahr.orchestrator -> yahr.experienceAssistant 'Rewrite the work-experience section (A2A)'
-      yahr.orchestrator -> yahr.projectsAssistant 'Rewrite the projects section (A2A)'
-    }
+    yahr.orchestrator -> openrouter 'Which agent fits the query? (LLM)'
+    yahr.orchestrator -> yahr.jobSearcher 'Forward the query (A2A, streaming)'
+    yahr.jobSearcher -> yahr.adzunaMcp 'search(query) (MCP)'
+    yahr.adzunaMcp -> jobApis 'Search & fetch listing pages (HTTPS)'
+    yahr.jobSearcher -> yahr.orchestrator 'Found jobs'
+    yahr.orchestrator -> yahr.jobsFile 'Cache the found jobs (output/jobs.md)'
+    yahr.orchestrator -> yahr.cli 'Stream status, then render job cards'
 
     autoLayout LeftRight
   }
 
-  dynamic view refineLoop {
+  dynamic view rankFlow {
     variant sequence
 
-    title 'YAHR — Resume Refinement Loop'
+    title 'YAHR: Ranking Query'
     description '''
-      Two orchestrator calls. The first ranks the resume against the searched jobs;
-      the user picks one target job in the CLI. The second drives an iterative rewrite
-      loop — pick the weakest section from the ranker\'s gaps, route it to that section\'s
-      assistant, re-rank the patched resume against the chosen job, and keep the rewrite
-      only if the score rises — until no gap-bearing section helps or a round cap (N=5)
-      is reached. This convergence + stop condition is what the CLI cannot own cleanly.
+      A ranking or resume-gap query. The orchestrator reuses the jobs the Job
+      Searcher cached on an earlier run, only searching first when the cache is
+      empty, then bundles the question, those jobs, and the resume for the ranker
+      (the CV Assistant follows the same shape for gap analysis). There is no
+      automatic rewrite loop: the CV Assistant returns advice and the user edits
+      the resume themselves.
     '''
 
-    // Call 1 — rank.
-    yahr.cli -> yahr.orchestrator 'Rank resume vs jobs (A2A)'
-    parallel {
-      yahr.orchestrator -> yahr.resumeBuilder 'Build structured resume'
-      yahr.orchestrator -> yahr.jobSearcher 'Search & enrich jobs'
-    }
-    yahr.orchestrator <- yahr.resumeBuilder 'Resume'
-    yahr.orchestrator <- yahr.jobSearcher 'Job postings'
-    yahr.orchestrator -> yahr.ranker 'Score resume vs jobs'
-    yahr.orchestrator <- yahr.ranker 'Ranked jobs + per-section gaps'
-    yahr.cli <- yahr.orchestrator 'Ranked jobs (user picks a target)'
-
-    // Call 2 — improve the resume for the chosen job.
-    yahr.cli -> yahr.orchestrator 'Improve resume for chosen job (A2A)' {
+    yahr.cli -> yahr.resumeFile 'Read output/resume.md'
+    yahr.cli -> yahr.orchestrator 'ask "which job fits me?" + resume'
+    yahr.orchestrator -> openrouter 'Route the query (LLM)'
+    yahr.orchestrator -> yahr.jobsFile 'Load the cached jobs'
+    yahr.orchestrator -> yahr.jobSearcher 'Search first only if the cache is empty' {
       notes '''
-        **Loop start.** Each round the orchestrator calls only ONE section's assistant —
-        the weakest from the ranker's gaps (summary / skills / experience / projects),
-        shown here as skills. Repeat until no gap-bearing section raises the score, or
-        round == N (5).
+        The orchestrator caches the Job Searcher results between `ask` runs. A
+        ranking query reuses that cache and searches here only when nothing has
+        been searched yet.
       '''
     }
-    yahr.orchestrator -> yahr.skillsAssistant 'Rewrite the weakest section (existing facts only)'
-    yahr.orchestrator <- yahr.skillsAssistant 'Rewritten section'
+    yahr.jobSearcher -> yahr.orchestrator 'Jobs'
+    yahr.orchestrator -> yahr.jobsFile 'Cache the new jobs (write)'
+    yahr.orchestrator -> yahr.ranker 'Bundle question + jobs + resume (A2A)'
+    yahr.ranker -> openrouter 'Score & rank against the resume (LLM, seeded)'
+    yahr.ranker -> yahr.orchestrator 'Ranked jobs + answer'
+    yahr.cli <- yahr.orchestrator 'Stream status, then render Markdown'
+  }
 
-    yahr.orchestrator -> yahr.ranker 'Re-rank patched resume vs chosen job' {
+  dynamic view improveFlow {
+    variant sequence
+
+    title 'YAHR: Resume Improvement Query'
+    description '''
+      The user asks how to strengthen their resume for one specific job. The
+      orchestrator routes to the CV Assistant, reusing the jobs the Job Searcher
+      cached (searching first only when the cache is empty), then bundles the
+      request, those jobs, and the resume. The CV Assistant names the target job,
+      compares it against the resume, and returns a gap report with concrete
+      suggestions. It is advisory: it never rewrites the resume, so the user makes
+      the edits themselves.
+    '''
+
+    yahr.cli -> yahr.resumeFile 'Read output/resume.md'
+    yahr.cli -> yahr.orchestrator 'ask "improve my resume for <job>" + resume'
+    yahr.orchestrator -> openrouter 'Route the query (LLM)'
+    yahr.orchestrator -> yahr.jobsFile 'Load the cached jobs'
+    yahr.orchestrator -> yahr.jobSearcher 'Search first only if the cache is empty' {
       notes '''
-        **Loop back.** Keep the rewrite only if the score rises; otherwise drop it and
-        mark the section tried. Exit when no candidate section remains or rounds exhausted.
+        Same jobs cache as the ranking flow: the orchestrator reuses the Job
+        Searcher results from an earlier `ask` and searches here only when nothing
+        has been searched yet.
       '''
     }
-    yahr.orchestrator <- yahr.ranker 'Updated score + gaps'
-    yahr.cli <- yahr.orchestrator 'Best resume + change log'
+    yahr.jobSearcher -> yahr.orchestrator 'Jobs'
+    yahr.orchestrator -> yahr.jobsFile 'Cache the new jobs (write)'
+    yahr.orchestrator -> yahr.cvAssistant 'Bundle request + jobs + resume (A2A)'
+    yahr.cvAssistant -> openrouter 'Gap analysis vs the chosen job (LLM, seeded)' {
+      notes '''
+        One LLM call: pick the single job named in the request, compare it against
+        the resume, and emit a "## Gaps" section (each gap marked REWORD or
+        ACQUIRE) plus a "## Suggestions" section. It only claims the user already
+        has something when that fact is present in the resume.
+      '''
+    }
+    yahr.cvAssistant -> yahr.orchestrator 'Gaps + suggestions (Markdown)'
+    yahr.cli <- yahr.orchestrator 'Stream status, then render Markdown'
   }
 }
