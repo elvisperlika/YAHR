@@ -5,7 +5,7 @@ from collections.abc import Callable
 import typer
 from rich.console import Console
 
-from yahr.agents import job_searcher, ranker
+from yahr.agents import cv_assistant, job_searcher, ranker
 from yahr.mcp import adzuna, mock
 
 console = Console()
@@ -15,6 +15,7 @@ console = Console()
 _AGENTS: dict[str, Callable[[], None]] = {
     "job-searcher": job_searcher.serve,
     "ranker": ranker.serve,
+    "cv-assistant": cv_assistant.serve,
     "adzuna-mcp": adzuna.serve,
     "mock-mcp": mock.serve,
 }

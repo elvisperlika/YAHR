@@ -15,7 +15,12 @@ from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.helpers import get_data_parts, get_message_text, new_text_message
 from a2a.types import AgentCard, Message, Role, SendMessageRequest, TaskState
 
-from yahr.agents.roster import AGENT_URLS, JOB_SEARCHER_NAME, RANKER_NAME
+from yahr.agents.roster import (
+    AGENT_URLS,
+    CV_ASSISTANT_NAME,
+    JOB_SEARCHER_NAME,
+    RANKER_NAME,
+)
 from yahr.config import openrouter_client
 
 # A status update relayed to the CLI: (state, text, data), e.g.
@@ -230,10 +235,12 @@ async def route(query: str, resume: str | None = None) -> AsyncIterator[Update]:
             return
         _url, card = cards[name]
 
-        # The ranker scores jobs against the resume, so it needs the jobs as an
-        # artifact. Reuse the jobs the Job Searcher cached on an earlier run;
-        # only search afresh (and cache that) if nothing has been searched yet.
-        if name == RANKER_NAME:
+        # The ranker scores jobs against the resume, and the CV assistant analyses
+        # the gap against a chosen job — both need the jobs AND the resume as
+        # artifacts (the query carries neither). Reuse the jobs the Job Searcher
+        # cached on an earlier run; only search afresh (and cache that) if nothing
+        # has been searched yet.
+        if name in (RANKER_NAME, CV_ASSISTANT_NAME):
             jobs = _load_jobs()
             if jobs is None and JOB_SEARCHER_NAME in cards:
                 yield "searching", "No cached jobs — searching first", None
