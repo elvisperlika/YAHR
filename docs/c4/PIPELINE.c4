@@ -22,8 +22,8 @@ views {
     yahr.orchestrator -> yahr.jobSearcher 'Forward the query (A2A, streaming)'
     yahr.jobSearcher -> yahr.adzunaMcp 'search(query) (MCP)'
     yahr.adzunaMcp -> jobApis 'Search & fetch listing pages (HTTPS)'
-    yahr.jobSearcher -> yahr.orchestrator 'Found jobs'
-    yahr.orchestrator -> yahr.jobsFile 'Cache the found jobs (output/jobs.md)'
+    yahr.jobSearcher -> yahr.orchestrator 'Found jobs (A2A artifact)'
+    yahr.orchestrator -> yahr.jobsFile 'Cache the jobs artifact (output/jobs.md)'
     yahr.orchestrator -> yahr.cli 'Stream status, then render job cards'
 
     autoLayout LeftRight
@@ -53,8 +53,8 @@ views {
         been searched yet.
       '''
     }
-    yahr.jobSearcher -> yahr.orchestrator 'Jobs'
-    yahr.orchestrator -> yahr.jobsFile 'Cache the new jobs (write)'
+    yahr.jobSearcher -> yahr.orchestrator 'Jobs (A2A artifact)'
+    yahr.orchestrator -> yahr.jobsFile 'Cache the jobs artifact (write)'
     yahr.orchestrator -> yahr.ranker 'Bundle question + jobs + resume (A2A)'
     yahr.ranker -> openrouter 'Score & rank against the resume (LLM, seeded)'
     yahr.ranker -> yahr.orchestrator 'Ranked jobs + answer'
@@ -86,8 +86,8 @@ views {
         has been searched yet.
       '''
     }
-    yahr.jobSearcher -> yahr.orchestrator 'Jobs'
-    yahr.orchestrator -> yahr.jobsFile 'Cache the new jobs (write)'
+    yahr.jobSearcher -> yahr.orchestrator 'Jobs (A2A artifact)'
+    yahr.orchestrator -> yahr.jobsFile 'Cache the jobs artifact (write)'
     yahr.orchestrator -> yahr.cvAssistant 'Bundle request + jobs + resume (A2A)'
     yahr.cvAssistant -> openrouter 'Gap analysis vs the chosen job (LLM, seeded)' {
       notes '''

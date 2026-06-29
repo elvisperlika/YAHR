@@ -41,12 +41,15 @@ class JobSearcherExecutor(AgentExecutor):
         async for text, is_final, jobs in core.search(query):
             if is_final:
                 console.log(f"[bold green]done[/] {text.splitlines()[0]}")
-                # Text part for humans/the ranker; data part of structured jobs
-                # for the CLI to render as cards.
-                parts = [new_text_part(text)]
+                # Return the structured jobs as an A2A artifact (the task's
+                # tangible output), then complete with the rendered text for
+                # humans and the ranker.
                 if jobs:
-                    parts.append(new_data_part({"jobs": [asdict(j) for j in jobs]}))
-                await updater.complete(updater.new_agent_message(parts))
+                    await updater.add_artifact(
+                        [new_data_part({"jobs": [asdict(j) for j in jobs]})],
+                        name="jobs",
+                    )
+                await updater.complete(updater.new_agent_message([new_text_part(text)]))
             else:
                 console.log(f"  [dim]·[/] {text}")
                 await updater.update_status(

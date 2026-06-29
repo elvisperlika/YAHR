@@ -6,14 +6,14 @@ discovered agent best fits the query, then forwards the message to it over A2A.
 Only agents that are actually running (and thus serving a card) are routable.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 import httpx
 from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
 from a2a.helpers import get_data_parts, get_message_text, new_text_message
-from a2a.types import AgentCard, Message, Role, SendMessageRequest, TaskState
+from a2a.types import AgentCard, Part, Role, SendMessageRequest, TaskState
 
 from yahr.agents.roster import (
     AGENT_URLS,
@@ -281,14 +281,14 @@ async def _collect(http: httpx.AsyncClient, card: AgentCard, query: str) -> str:
     return final
 
 
-def _jobs_from(message: Message) -> list[Any] | None:
-    """Pull the structured jobs out of a message's data parts, or None.
+def _jobs_from_parts(parts: Sequence[Part]) -> list[Any] | None:
+    """Pull the structured jobs out of the Job Searcher's artifact parts, or None.
 
     Args:
-        message: The agent message to inspect (its data parts, if any). Data
-            parts are untyped JSON from the SDK, so the dict shape is asserted.
+        parts: The parts of the `jobs` A2A artifact. Data parts are untyped JSON
+            from the SDK, so the dict shape is asserted.
     """
-    for part in get_data_parts(message.parts):
+    for part in get_data_parts(parts):
         if not isinstance(part, dict):
             continue
         jobs = cast("dict[str, Any]", part).get("jobs")
@@ -304,6 +304,10 @@ async def _send(
 ) -> AsyncIterator[Update]:
     """Stream a discovered agent's task status as (state, text, data) triples.
 
+    The Job Searcher returns its found jobs as an A2A artifact (a `jobs` data
+    part). That artifact event arrives before the completing status update, so we
+    hold the jobs and attach them to the final ('completed', text, jobs) triple.
+
     Args:
         http: Async HTTP client (reused from discovery).
         card: The target agent's discovered Agent Card.
@@ -311,14 +315,18 @@ async def _send(
     """
     client = ClientFactory(ClientConfig(httpx_client=http)).create(card)
     request = SendMessageRequest(message=new_text_message(query, role=Role.ROLE_USER))
+    jobs: list[Any] | None = None
     async for resp in client.send_message(request):
-        if resp.HasField("status_update"):
+        if resp.HasField("artifact_update"):
+            jobs = _jobs_from_parts(resp.artifact_update.artifact.parts) or jobs
+        elif resp.HasField("status_update"):
             status = resp.status_update.status
             msg = status.message if status.HasField("message") else None
             text = get_message_text(msg) if msg else ""
-            yield _state_label(status.state), text, _jobs_from(msg) if msg else None
+            state = _state_label(status.state)
+            yield state, text, jobs if state == "completed" else None
         elif resp.HasField("message"):
-            yield "completed", get_message_text(resp.message), _jobs_from(resp.message)
+            yield "completed", get_message_text(resp.message), jobs
         elif resp.HasField("task"):
             yield _state_label(resp.task.status.state), "", None
 
@@ -366,5 +374,13 @@ if __name__ == "__main__":
     needs_resume("tailor my resume to these jobs")
     assert len(routed) == 2, routed
     assert all(c["temperature"] == 0 and c["seed"] == _SEED for c in routed), routed
+
+    # ponytail: the jobs artifact is the orchestrator's new trust boundary — check
+    # the structured jobs survive the round-trip through a real data Part.
+    from a2a.helpers import new_data_part
+
+    one = [new_data_part({"jobs": [{"id": "1", "title": "Dev"}]})]
+    assert _jobs_from_parts(one) == [{"id": "1", "title": "Dev"}], _jobs_from_parts(one)
+    assert _jobs_from_parts([new_data_part({"nope": 1})]) is None
 
     print("orchestrator self-check ok")

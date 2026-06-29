@@ -17,6 +17,12 @@ specification {
       color indigo
     }
   }
+  element artifact {
+    style {
+      shape queue
+      color sky
+    }
+  }
   element externalSystem {
     style {
       color secondary
@@ -72,6 +78,10 @@ model {
     jobsFile = file 'output/jobs.md' {
       description 'The orchestrator cache of the last job search, so a ranking or improvement query reuses those jobs instead of searching again.'
     }
+
+    jobsArtifact = artifact 'Jobs (A2A artifact)' {
+      description 'The Job Searcher task output: the structured jobs it found, returned to the orchestrator as an A2A Artifact (a `jobs` data part). The orchestrator reads it off the artifact event, forwards it to the ranker and CV assistant, and caches it to output/jobs.md.'
+    }
   }
 
   openrouter = externalSystem 'OpenRouter' {
@@ -101,8 +111,12 @@ model {
   ranker -> openrouter 'Scores jobs against the profile (HTTPS / JSON)'
   cvAssistant -> openrouter 'Analyzes the resume gap via LLM (HTTPS / JSON)'
 
+  // The Job Searcher's structured output, returned over A2A as a task artifact.
+  jobSearcher -> jobsArtifact 'Produces & returns it (A2A)'
+  orchestrator -> jobsArtifact 'Receives it, forwards to the ranker / CV assistant'
+
   // Local files the system uses as memory between runs.
-  orchestrator -> jobsFile 'Caches the found jobs, reloads them next run (read/write)'
+  orchestrator -> jobsFile 'Caches the jobs artifact to disk, reloads it next run (read/write)'
   orchestrator -> resumeFile 'Caches and reuses the attached resume (read/write)'
 }
 
