@@ -1,8 +1,9 @@
-"""`yahr ask "<query>"` — route a query and show the agent's task status live."""
+"""`yahr start` — chat with the agents, or `yahr start "<query>"` for a one-shot run."""
 
 import asyncio
 from pathlib import Path
 
+import typer
 from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -80,13 +81,49 @@ async def _run(query: str, resume: str | None) -> None:
     console.print(final)
 
 
-def ask(query: str, resume: Path = Path("output/resume.md")):
-    """Route a natural-language query to the best agent and show its progress.
+def _read(resume: Path) -> str | None:
+    """Read the resume Markdown fresh, or None if the file is absent.
+
+    Args:
+        resume: Path to the Markdown resume.
+    """
+    return resume.read_text() if resume.exists() else None
+
+
+def start(query: str = typer.Argument(None), resume: Path = Path("output/resume.md")):
+    """Chat with the agents, or answer one query and exit if given.
+
+    With no query, opens a REPL: type a request, see the result, repeat — the
+    orchestrator caches jobs and resume across turns, so a search → rank → tailor
+    flow carries over. Ctrl-D or 'exit' quits; Ctrl-C cancels the current turn.
 
     Args:
         query: What you want, e.g. "show me 'java developer' jobs in milano".
+            Omit it to start the chat.
         resume: Markdown resume to attach; the orchestrator decides per-query
-            whether it is useful. Ignored if the file does not exist.
+            whether it is useful. Re-read each turn, ignored if absent.
     """
-    text = resume.read_text() if resume.exists() else None
-    asyncio.run(_run(query, text))
+    if query:
+        asyncio.run(_run(query, _read(resume)))
+        return
+
+    console.print("[dim]YAHR — ask anything. Ctrl-D or 'exit' to quit.[/]")
+    while True:
+        try:
+            q = console.input("[bold green]> [/]").strip()
+        except EOFError:
+            console.print()
+            return
+        except KeyboardInterrupt:
+            console.print()
+            continue
+        if q in ("exit", "quit"):
+            return
+        if not q:
+            continue
+        try:
+            # ponytail: new event loop + agent re-discovery per turn; fine for a
+            # CLI. Hoist the loop/httpx client into the REPL if turns feel slow.
+            asyncio.run(_run(q, _read(resume)))
+        except KeyboardInterrupt:
+            console.print("\n[dim]cancelled[/]")

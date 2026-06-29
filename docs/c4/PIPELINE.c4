@@ -2,14 +2,14 @@ views {
   dynamic view pipeline {
     title 'YAHR: Ask Pipeline'
     description '''
-      One `ask` query, end to end. The CLI runs the orchestrator in-process: it
+      One `start` query, end to end. The CLI runs the orchestrator in-process: it
       discovers the running agents over A2A, asks the LLM which one fits, forwards
       the query, and streams the result back. Shown here for a plain job search;
       a ranking or resume-gap query routes to the ranker or CV Assistant instead
       and reuses the jobs the searcher cached (see the sequence view).
     '''
 
-    yahr.cli -> yahr.orchestrator 'ask "<query>" (attaches output/resume.md if present)'
+    yahr.cli -> yahr.orchestrator 'start "<query>" (attaches output/resume.md if present)'
 
     // Discover the running agents by fetching their Agent Cards.
     parallel {
@@ -23,7 +23,6 @@ views {
     yahr.jobSearcher -> yahr.adzunaMcp 'search(query) (MCP)'
     yahr.adzunaMcp -> jobApis 'Search & fetch listing pages (HTTPS)'
     yahr.jobSearcher -> yahr.orchestrator 'Found jobs (A2A artifact)'
-    yahr.orchestrator -> yahr.jobsFile 'Cache the jobs artifact (output/jobs.md)'
     yahr.orchestrator -> yahr.cli 'Stream status, then render job cards'
 
     autoLayout LeftRight
@@ -42,19 +41,16 @@ views {
       the resume themselves.
     '''
 
-    yahr.cli -> yahr.resumeFile 'Read output/resume.md'
-    yahr.cli -> yahr.orchestrator 'ask "which job fits me?" + resume'
+    yahr.cli -> yahr.orchestrator 'start "which job fits me?" + resume'
     yahr.orchestrator -> openrouter 'Route the query (LLM)'
-    yahr.orchestrator -> yahr.jobsFile 'Load the cached jobs'
     yahr.orchestrator -> yahr.jobSearcher 'Search first only if the cache is empty' {
       notes '''
-        The orchestrator caches the Job Searcher results between `ask` runs. A
+        The orchestrator caches the Job Searcher results between `start` runs. A
         ranking query reuses that cache and searches here only when nothing has
         been searched yet.
       '''
     }
     yahr.jobSearcher -> yahr.orchestrator 'Jobs (A2A artifact)'
-    yahr.orchestrator -> yahr.jobsFile 'Cache the jobs artifact (write)'
     yahr.orchestrator -> yahr.ranker 'Bundle question + jobs + resume (A2A)'
     yahr.ranker -> openrouter 'Score & rank against the resume (LLM, seeded)'
     yahr.ranker -> yahr.orchestrator 'Ranked jobs + answer'
@@ -75,19 +71,16 @@ views {
       the edits themselves.
     '''
 
-    yahr.cli -> yahr.resumeFile 'Read output/resume.md'
-    yahr.cli -> yahr.orchestrator 'ask "improve my resume for <job>" + resume'
+    yahr.cli -> yahr.orchestrator 'start "improve my resume for <job>" + resume'
     yahr.orchestrator -> openrouter 'Route the query (LLM)'
-    yahr.orchestrator -> yahr.jobsFile 'Load the cached jobs'
     yahr.orchestrator -> yahr.jobSearcher 'Search first only if the cache is empty' {
       notes '''
         Same jobs cache as the ranking flow: the orchestrator reuses the Job
-        Searcher results from an earlier `ask` and searches here only when nothing
+        Searcher results from an earlier `start` and searches here only when nothing
         has been searched yet.
       '''
     }
     yahr.jobSearcher -> yahr.orchestrator 'Jobs (A2A artifact)'
-    yahr.orchestrator -> yahr.jobsFile 'Cache the jobs artifact (write)'
     yahr.orchestrator -> yahr.cvAssistant 'Bundle request + jobs + resume (A2A)'
     yahr.cvAssistant -> openrouter 'Gap analysis vs the chosen job (LLM, seeded)' {
       notes '''

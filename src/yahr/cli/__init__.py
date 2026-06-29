@@ -2,10 +2,10 @@ import logging
 
 import typer
 
-from yahr.cli.commands.ask import ask
 from yahr.cli.commands.convert import convert
 from yahr.cli.commands.hello import hello
 from yahr.cli.commands.serve import serve
+from yahr.cli.commands.start import start
 
 app = typer.Typer(
     help="YAHR — Yet Another HR career co-pilot.",
@@ -25,7 +25,7 @@ def main():
 app.command()(hello)
 app.command()(convert)
 app.command()(serve)
-app.command()(ask)
+app.command()(start)
 
 
 if __name__ == "__main__":

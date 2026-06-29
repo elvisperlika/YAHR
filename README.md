@@ -56,12 +56,12 @@ YAHR_JOBS_MCP_URL=http://127.0.0.1:8006/mcp
 | --- | --- |
 | `yahr convert <resume.pdf>` | Convert a PDF resume to clean Markdown at `output/<name>.md` — one LLM pass repairs reading order and structure. |
 | `yahr serve [name]` | Run an A2A agent or a job-provider MCP server. A2A agents: `job-searcher` (default, `127.0.0.1:8002`), `ranker` (`8003`). MCP providers: `adzuna-mcp` (`8005`), `mock-mcp` (`8006`). |
-| `yahr ask "<query>"` | Route a natural-language query to the best running agent and stream its progress live. |
+| `yahr start [query]` | Chat with the agents (REPL), or pass a query for a one-shot run — routes it to the best running agent and streams progress live. |
 | `yahr hello [--name X]` | Sanity-check that the CLI is installed. |
 
 ### Try it
 
-`ask` only routes to agents that are actually running and serving an Agent Card, so start one first. The Job Searcher also needs a job-provider MCP server up, since that is where it gets its listings. In different terminals run:
+`start` only routes to agents that are actually running and serving an Agent Card, so run one first. The Job Searcher also needs a job-provider MCP server up, since that is where it gets its listings. In different terminals run:
 
 ```bash
 # Start a job-provider MCP server (Adzuna; swap for mock-mcp to run offline)
@@ -81,17 +81,17 @@ yahr serve ranker
 In another:
 
 ```bash
-yahr ask "show me 'java developer' jobs in milano"
+yahr start "show me 'java developer' jobs in milano"
 ```
 
-To rank jobs against your résumé, first turn your PDF into Markdown — `convert resume.pdf` writes `output/resume.md`, which `ask` picks up automatically (use `--resume <path>` for any other name). Then ask a ranking question:
+To rank jobs against your résumé, first turn your PDF into Markdown — `convert resume.pdf` writes `output/resume.md`, which `start` picks up automatically (use `--resume <path>` for any other name). Then ask a ranking question:
 
 ```bash
 # 1. résumé PDF -> output/resume.md
 yahr convert resume.pdf
 
 # 2. rank the jobs from the search above against it
-yahr ask "which of these jobs best fits my resume?"
+yahr start "which of these jobs best fits my resume?"
 ```
 
 The orchestrator discovers the running agents, asks the LLM which one fits, and forwards the request, streaming its progress live. A plain search goes to the Job Searcher; a ranking query goes to the Ranker, which scores jobs against your résumé — reusing the jobs from a prior search, or searching first if there are none.

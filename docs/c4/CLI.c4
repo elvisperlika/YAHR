@@ -50,8 +50,8 @@ model {
         technology 'Rich'
       }
 
-      askCmd = command 'ask' {
-        description 'Routes a natural-language query to the best running agent through the orchestrator, streams the task status as it arrives, and renders the result: found jobs as cards, any other agent reply as Markdown. Attaches output/resume.md when the file exists, and lets the orchestrator decide per query whether to use it.'
+      startCmd = command 'start' {
+        description 'Opens a chat REPL with the agents, or answers a single query and exits if one is given. Routes each request to the best running agent through the orchestrator, streams the task status as it arrives, and renders the result: found jobs as cards, any other agent reply as Markdown. Attaches output/resume.md when the file exists, and lets the orchestrator decide per query whether to use it.'
         technology 'a2a-sdk client · httpx'
       }
 
@@ -62,11 +62,7 @@ model {
   user -> cli.convertCmd 'yahr convert cv.pdf'
   user -> cli.serveAgentCmd 'yahr serve job-searcher'
   user -> cli.helloCmd 'yahr hello'
-  user -> cli.askCmd 'yahr ask "python developer jobs in milano"'
-
-  // The resume file (defined in YAHR.c4 inside the yahr system) the CLI touches.
-  cli.convertCmd -> yahr.resumeFile 'Writes output/<stem>.md'
-  cli.askCmd -> yahr.resumeFile 'Reads the resume to attach (if present)'
+  user -> cli.startCmd 'yahr start "python developer jobs in milano"'
 }
 
 views {
