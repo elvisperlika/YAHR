@@ -30,6 +30,8 @@ YAHR treats this as a single-user problem. The only actor is the candidate, who 
 
 A full run moves through the domain in five stages. The PDF resume is converted into the Markdown profile. The candidate states a query. The system searches external job sources and gathers the matching openings. It scores each opening against the resume and ranks them best first. Finally, for a role the candidate cares about, it compares the resume against that posting and reports the gaps together with suggested edits. The candidate stays in control the whole way through: YAHR finds, scores, and advises, but it never applies on the candidate's behalf and never edits the resume itself.
 
+![Pipeline](image/LikeC4%20Pipeline.jpg)
+
 ## Design
 
 YAHR is built on A2A (Agent-to-Agent), an open protocol that lets independent agents talk to each other over HTTP. The work is split across one orchestrator and three specialized agents, each running as its own A2A server on its own port and doing a single job. The orchestrator sits in front of all three, routing each request to the agent that fits and streaming the result back to the terminal.
@@ -58,6 +60,8 @@ A2A defines more of a surface than YAHR uses. There are methods to fetch a task'
 
 The running system is a single CLI process and the servers it reaches over the network. The CLI is the only thing the candidate starts directly, and the orchestrator runs inside it. The orchestrator holds no agent logic of its own; it discovers agents, routes a query to one of them, and relays the answer.
 
+![Index](image/LikeC4%20Index.jpg)
+
 Routing happens on every query and rides on that discovery. The orchestrator fetches the live card from each endpoint in the roster, drops any that is down or serves no card, and hands the cards it has and the query to an LLM that picks the single agent to handle it, or answers that none fits. Only a running agent can be chosen.
 
 Once an agent is chosen, the orchestrator forwards the query over A2A and streams the task's status back to the CLI while the agent works. The Job Searcher is the only agent that reaches outside YAHR: it is an MCP client to a job-provider server, which is in turn a client to the job board's HTTP API. The Ranker and the CV Assistant call the LLM through OpenRouter and nothing else.
@@ -66,9 +70,13 @@ The Job Searcher's jobs come back to the orchestrator as an A2A artifact, and th
 
 The two MCP job servers, Adzuna and the offline mock, are deliberately left out of the roster. They are MCP servers, not A2A agents, and the orchestrator must never route a query to them. Only the Job Searcher reaches them, and only as an MCP client.
 
+![Containers](image/LikeC4%20Containers.jpg)
+
 #### CLI Architecture
 
 The CLI is a Typer application that renders with Rich, and it exposes four commands. `convert` turns a resume PDF into the Markdown profile: markitdown extracts the raw text, then one LLM pass repairs the reading order and applies Markdown structure. `serve` runs one server until interrupted, either an A2A agent (`job-searcher`, `ranker`, `cv-assistant`) or a job-provider MCP server (`adzuna-mcp`, `mock-mcp`). `start` is the main command: given a query it answers once and exits, and with no query it opens a chat REPL. `hello` just checks that the CLI is installed.
+
+![CLI Interface](image/CLI%20Interface.jpg)
 
 Today that orchestrator runs in-process inside `start`; a standalone one on its own port is planned but not yet built, and its port is already reserved. For each request, `start` reads the resume file if it is there, passes the query and resume to the orchestrator, and renders what streams back: found jobs as boxed cards, any other agent reply as Markdown, and the intermediate status lines as the agent works. In the REPL those caches carry across turns, so a search, a "which of these fits me?" question, and a "what should I fix for the Acme role?" question become one conversation instead of three from-scratch runs.
 
@@ -104,7 +112,11 @@ A ranking query pulls the pieces together. Say the candidate has already convert
 6. Ranker → Orchestrator: the task reaches `completed` with the ranked list and the answer.
 7. Orchestrator → CLI: the result streams up and renders as Markdown.
 
+![Rank Flow](image/Rank%20Flow%20from%20LikeC4.jpg)
+
 The resume-improvement flow has the same shape. The router picks the CV Assistant instead, and the bundled call comes back with gaps and suggestions rather than a ranking.
+
+![Improve Flow](image/Improve%20Flow%20from%20LikeC4.jpg)
 
 ## Tech Stack
 
