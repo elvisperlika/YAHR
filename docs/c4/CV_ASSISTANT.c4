@@ -1,0 +1,30 @@
+// Component view of the CV Assistant agent (src/yahr/agents/cv_assistant/).
+// Each component is one module in that package.
+
+model {
+  extend yahr.cvAssistant {
+    agentCard = module 'Agent Card' {
+      description 'Public A2A identity (agent_card.py): the analyze-gaps skill, for improve / strengthen / tailor requests and not search or ranking.'
+    }
+    executor = module 'Executor' {
+      description 'A2A task lifecycle (executor.py): relays core.analyze, streams WORKING status, and completes with the gap report.'
+    }
+    core = module 'Core' {
+      description 'One seeded LLM call (core.py): picks the target job, then emits a Gaps section (each marked REWORD or ACQUIRE) and a Suggestions section. No A2A types.'
+    }
+  }
+
+  yahr.cvAssistant.executor -> yahr.cvAssistant.core 'Runs the gap analysis'
+  yahr.cvAssistant.core -> openrouter 'Gap analysis vs the chosen job (LLM, seeded)'
+}
+
+views {
+  view cvAssistantComponents of yahr.cvAssistant {
+    title 'YAHR CV Assistant: Components'
+
+    include *
+    include openrouter
+
+    autoLayout TopBottom
+  }
+}

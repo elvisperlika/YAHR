@@ -1,0 +1,41 @@
+// Component view of the Job Searcher agent (src/yahr/agents/job_searcher/).
+// Each component is one module in that package. Reuses the `module` kind from CLI.c4.
+
+model {
+  extend yahr.jobSearcher {
+    agentCard = module 'Agent Card' {
+      description 'The public A2A identity (agent_card.py): name, JSON-RPC interface, streaming capability, and the search-jobs skill the orchestrator routes on.'
+    }
+    executor = module 'Executor' {
+      description 'The A2A task lifecycle (executor.py): runs the search, streams WORKING status, returns the found jobs as an artifact, and completes the task.'
+    }
+    core = module 'Core' {
+      description 'The protocol-free search loop (core.py): fetch, dedupe by id, broaden, and stop on the target count, convergence, or the call budget. No A2A types.'
+    }
+    providers = module 'MCP Provider' {
+      description 'The MCP client (providers.py): connects to whatever job-provider server jobs_mcp_url() resolves to and calls its generic search(query) tool.'
+    }
+    refine = module 'Refiner' {
+      description 'Query broadening (refine.py): an LLM-first synonym or adjacent title, with a deterministic drop-a-qualifier heuristic fallback.'
+    }
+  }
+
+  yahr.jobSearcher.executor -> yahr.jobSearcher.core 'Runs the search loop'
+  yahr.jobSearcher.core -> yahr.jobSearcher.providers 'Fetches jobs (search)'
+  yahr.jobSearcher.core -> yahr.jobSearcher.refine 'Broadens the query when short'
+  yahr.jobSearcher.refine -> openrouter 'Broaden the query (LLM)'
+  yahr.jobSearcher.providers -> yahr.adzunaMcp 'search(query) (MCP)'
+  yahr.jobSearcher.providers -> yahr.mockMcp 'Offline alternative (MCP)'
+  yahr.jobSearcher.executor -> yahr.jobsArtifact 'Produces the jobs artifact (A2A)'
+}
+
+views {
+  view jobSearcherComponents of yahr.jobSearcher {
+    title 'YAHR Job Searcher: Components'
+
+    include *
+    include yahr.adzunaMcp, yahr.mockMcp, yahr.jobsArtifact, openrouter
+
+    autoLayout TopBottom
+  }
+}

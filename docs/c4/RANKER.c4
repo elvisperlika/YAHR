@@ -1,0 +1,30 @@
+// Component view of the Ranker agent (src/yahr/agents/ranker/).
+// Each component is one module in that package.
+
+model {
+  extend yahr.ranker {
+    agentCard = module 'Agent Card' {
+      description 'Public A2A identity (agent_card.py): the rank-jobs skill, marked for matching and ranking and not plain search.'
+    }
+    executor = module 'Executor' {
+      description 'A2A task lifecycle (executor.py): relays core.rank, streams WORKING status, and completes with the ranked answer.'
+    }
+    core = module 'Core' {
+      description 'One seeded LLM call (core.py): scores each job 0-100 against the resume on a fixed rubric, ranks best first, ties broken by input order. No A2A types.'
+    }
+  }
+
+  yahr.ranker.executor -> yahr.ranker.core 'Runs the scoring'
+  yahr.ranker.core -> openrouter 'Score & rank against the resume (LLM, seeded)'
+}
+
+views {
+  view rankerComponents of yahr.ranker {
+    title 'YAHR Ranker: Components'
+
+    include *
+    include openrouter
+
+    autoLayout TopBottom
+  }
+}

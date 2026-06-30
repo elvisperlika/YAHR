@@ -1,0 +1,56 @@
+// Component view of the Orchestrator (src/yahr/agents/orchestrator.py).
+// It is one module today; these are its functional components, all driven by
+// route(): A2A discovery, LLM routing, the resume decision, the streaming A2A
+// client, and the filesystem cache. Reuses the `function` kind from CLI.c4.
+
+model {
+  extend yahr.orchestrator {
+    route = function 'route()' {
+      description 'The driver: discovers agents, routes the query, attaches or loads the resume, reuses cached jobs, and streams (state, text, data) updates back to the CLI.'
+    }
+    discover = function 'discover()' {
+      description 'A2A discovery: fetches the Agent Card at each configured endpoint from its well-known URI, skipping any that is down or cardless.'
+    }
+    router = function 'choose_agent()' {
+      description 'LLM routing: renders the discovered cards into a prompt and asks the LLM for the single best agent name, validated against the discovered set.'
+    }
+    resumeCheck = function 'needs_resume()' {
+      description 'Asks the LLM whether the query needs the resume; a plain search does not, ranking or resume advice does.'
+    }
+    stream = function '_send()' {
+      description 'Drives the chosen agent over A2A, streaming task status and lifting the structured jobs out of the artifact event.'
+    }
+    cache = function 'jobs / resume cache' {
+      description 'Filesystem cache (output/jobs.md, output/resume.md) so a later ranking or resume query reuses the last search and the last attached resume.'
+    }
+  }
+
+  yahr.orchestrator.route -> yahr.orchestrator.discover 'Discover running agents'
+  yahr.orchestrator.route -> yahr.orchestrator.router 'Ask which agent fits'
+  yahr.orchestrator.route -> yahr.orchestrator.resumeCheck 'Decide whether to attach the resume'
+  yahr.orchestrator.route -> yahr.orchestrator.cache 'Reuse cached jobs & resume'
+  yahr.orchestrator.route -> yahr.orchestrator.stream 'Forward to the chosen agent'
+
+  yahr.orchestrator.discover -> yahr.jobSearcher 'GET agent card (A2A)'
+  yahr.orchestrator.discover -> yahr.ranker 'GET agent card (A2A)'
+  yahr.orchestrator.discover -> yahr.cvAssistant 'GET agent card (A2A)'
+
+  yahr.orchestrator.router -> openrouter 'Which agent fits? (LLM)'
+  yahr.orchestrator.resumeCheck -> openrouter 'Needs resume? (LLM)'
+
+  yahr.orchestrator.stream -> yahr.jobSearcher 'Send & stream task (A2A)'
+  yahr.orchestrator.stream -> yahr.ranker 'Send & stream task (A2A)'
+  yahr.orchestrator.stream -> yahr.cvAssistant 'Send & stream task (A2A)'
+  yahr.orchestrator.stream -> yahr.jobsArtifact 'Lifts structured jobs from the artifact'
+}
+
+views {
+  view orchestratorComponents of yahr.orchestrator {
+    title 'YAHR Orchestrator: Components'
+
+    include *
+    include yahr.jobSearcher, yahr.ranker, yahr.cvAssistant, yahr.jobsArtifact, openrouter
+
+    autoLayout TopBottom
+  }
+}

@@ -42,7 +42,7 @@ model {
     // the job-provider MCP servers the CLI orchestrates are defined here.
 
     orchestrator = agent 'Orchestrator Agent' {
-      description 'Routes each query to the best agent: it discovers the running agents over A2A by fetching their Agent Cards, asks an LLM which one fits, forwards the message, and streams the result back. It caches the found jobs and the attached resume between runs so a ranking query can reuse them. The CLI runs it in-process today; the standalone served Orchestrator on its own port is still planned.'
+      description 'Routes each query to the best agent: it discovers the running agents over A2A by fetching their Agent Cards, asks an LLM which one fits, forwards the message, and streams the result back. It caches the found jobs and the attached resume between runs so a ranking query can reuse them.'
       technology 'A2A client, OpenAI client, httpx'
     }
 

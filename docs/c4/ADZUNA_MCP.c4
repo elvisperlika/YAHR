@@ -1,0 +1,38 @@
+// Component view of the Adzuna MCP server (src/yahr/mcp/adzuna/).
+// Each component is one module in that package.
+
+model {
+  extend yahr.adzunaMcp {
+    server = module 'MCP Server' {
+      description 'FastMCP wiring (server.py): exposes the generic search(query) tool over streamable-http and assembles the jobs result.'
+    }
+    client = module 'Adzuna Client' {
+      description 'Adzuna HTTP access (client.py): reads credentials, fetches one /search page, and maps the response into Jobs.'
+    }
+    extract = module 'Query Extractor' {
+      description 'Natural language to Adzuna params (extract.py): an LLM maps the query to whitelisted search fields, falling back to the whole query as the what term.'
+    }
+    enrich = module 'Enricher' {
+      description 'Full-description fetch (enrich.py): retrieves each posting page and runs an LLM pass to trim it to just the job description; best-effort.'
+    }
+  }
+
+  yahr.adzunaMcp.server -> yahr.adzunaMcp.client 'search_adzuna(query)'
+  yahr.adzunaMcp.server -> yahr.adzunaMcp.enrich 'Adds full descriptions'
+  yahr.adzunaMcp.client -> yahr.adzunaMcp.extract 'Builds search params'
+  yahr.adzunaMcp.extract -> openrouter 'Map query to params (LLM)'
+  yahr.adzunaMcp.enrich -> openrouter 'Trim page to the posting (LLM)'
+  yahr.adzunaMcp.client -> jobApis 'GET /search (HTTPS)'
+  yahr.adzunaMcp.enrich -> jobApis 'Fetch listing pages (HTTPS)'
+}
+
+views {
+  view adzunaMcpComponents of yahr.adzunaMcp {
+    title 'YAHR Adzuna MCP Server: Components'
+
+    include *
+    include openrouter, jobApis
+
+    autoLayout TopBottom
+  }
+}

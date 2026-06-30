@@ -1,0 +1,25 @@
+// Component view of the Mock MCP server (src/yahr/mcp/mock/).
+// Each component is one module in that package.
+
+model {
+  extend yahr.mockMcp {
+    server = module 'MCP Server' {
+      description 'FastMCP wiring (server.py): exposes the same search(query) tool as Adzuna over streamable-http.'
+    }
+    jobs = module 'Canned Jobs' {
+      description 'Deterministic mock data (jobs.py): mock_jobs(query) returns five jobs whose ids vary with the query, so a refined query surfaces new ones.'
+    }
+  }
+
+  yahr.mockMcp.server -> yahr.mockMcp.jobs 'Returns canned jobs'
+}
+
+views {
+  view mockMcpComponents of yahr.mockMcp {
+    title 'YAHR Mock MCP Server: Components'
+
+    include *
+
+    autoLayout TopBottom
+  }
+}
