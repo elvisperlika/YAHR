@@ -57,7 +57,7 @@ The Job Searcher's core is the one piece with real control flow. Its three `brea
 
 ```python
 # agents/job_searcher/core.py
-async def _run(goal: Goal, fetch: Fetch = mock_jobs, refiner: Refiner = refine):
+async def _run(goal: Goal, fetch: Fetch = mock_jobs, refiner: Refiner = refine) -> AsyncIterator[Step]:
     cache: dict[str, Job] = {}
     query, calls = goal.query, 0
     for _ in range(goal.max_rounds):
@@ -92,4 +92,4 @@ CV_ASSISTANT_ADDRESS = AgentAddress("127.0.0.1", 8007)
 AGENT_URLS = [JOB_SEARCHER_ADDRESS.url, RANKER_ADDRESS.url, CV_ASSISTANT_ADDRESS.url]
 ```
 
-The agent cards import these names and the `serve()` functions bind these addresses, while the orchestrator's `discover()` walks `AGENT_URLS` fetching each card. Throughout, the code leans on plain dataclasses (`Job`, `Goal`, `AgentAddress`), type hints, and `asyncio`, and every core or logic module ends with an assert-based `__main__` self-check (see Testing).
+The agent cards import these names and the `serve()` functions bind these addresses, while the orchestrator's `discover()` walks `AGENT_URLS` fetching each card. Throughout, the code leans on plain dataclasses (`Job`, `Goal`, `AgentAddress`), type hints, and `asyncio`, and every core or logic module ends with an assert-based `__main__` self-check.
