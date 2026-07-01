@@ -56,3 +56,30 @@ AGENT_URLS: list[str] = [
     RANKER_ADDRESS.url,
     CV_ASSISTANT_ADDRESS.url,
 ]
+
+
+if __name__ == "__main__":
+    # ponytail: pure invariants — no import here can drift a name/port apart, and
+    # a port collision or a leaked MCP server in AGENT_URLS would break routing.
+    assert AgentAddress("127.0.0.1", 8002).url == "http://127.0.0.1:8002"
+
+    addresses = [
+        JOB_SEARCHER_ADDRESS,
+        RANKER_ADDRESS,
+        CV_ASSISTANT_ADDRESS,
+        ADZUNA_MCP_ADDRESS,
+        MOCK_MCP_ADDRESS,
+    ]
+    ports = [a.port for a in addresses]
+    assert len(ports) == len(set(ports)), f"port collision: {ports}"
+    assert 8004 not in ports  # reserved for the planned standalone Orchestrator
+
+    # The Orchestrator discovers exactly the three A2A agents, never the MCP servers.
+    assert AGENT_URLS == [
+        JOB_SEARCHER_ADDRESS.url,
+        RANKER_ADDRESS.url,
+        CV_ASSISTANT_ADDRESS.url,
+    ]
+    assert ADZUNA_MCP_ADDRESS.url not in AGENT_URLS
+    assert MOCK_MCP_ADDRESS.url not in AGENT_URLS
+    print("roster self-check ok")

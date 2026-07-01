@@ -21,6 +21,8 @@ Elvis Perlika
 
 {% include code.md %}
 
+{% include testing.md %}
+
 {% include deployment.md %}
 
 {% include conclusion.md %}

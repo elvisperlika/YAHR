@@ -92,4 +92,4 @@ CV_ASSISTANT_ADDRESS = AgentAddress("127.0.0.1", 8007)
 AGENT_URLS = [JOB_SEARCHER_ADDRESS.url, RANKER_ADDRESS.url, CV_ASSISTANT_ADDRESS.url]
 ```
 
-The agent cards import these names and the `serve()` functions bind these addresses, while the orchestrator's `discover()` walks `AGENT_URLS` fetching each card. Throughout, the code leans on plain dataclasses (`Job`, `Goal`, `AgentAddress`), type hints, and `asyncio`, and every core or logic module ends with an assert-based `__main__` self-check.
+The agent cards import these names and the `serve()` functions bind these addresses, while the orchestrator's `discover()` walks `AGENT_URLS` fetching each card. Throughout, the code leans on plain dataclasses (`Job`, `Goal`, `AgentAddress`), type hints, and `asyncio`, and every core or logic module ends with an assert-based `__main__` self-check (see Testing).

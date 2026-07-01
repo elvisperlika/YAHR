@@ -64,3 +64,35 @@ def jobs_mcp_url() -> str:
     """
     load_dotenv()
     return os.environ.get("YAHR_JOBS_MCP_URL", DEFAULT_JOBS_MCP_URL)
+
+
+if __name__ == "__main__":
+    import tempfile
+
+    # base_url normalization: the OpenAI SDK appends /chat/completions itself, so a
+    # pasted OpenRouter URL that already has it must be trimmed back to /api/v1.
+    os.environ["OPENROUTER_API_KEY"] = "test-key"
+    os.environ["OPENROUTER_BASE_URL"] = "https://openrouter.ai/api/v1/chat/completions/"
+    client, _ = openrouter_client()
+    assert str(client.base_url).rstrip("/").endswith("/api/v1"), client.base_url
+    assert "chat/completions" not in str(client.base_url), client.base_url
+
+    # load_dotenv: parse KEY=VALUE, skip comments/blanks/no-'=' lines, strip quotes,
+    # and never clobber a value already in the environment (setdefault).
+    with tempfile.TemporaryDirectory() as d:
+        cwd = os.getcwd()
+        os.chdir(d)
+        try:
+            Path(".env").write_text(
+                '# comment\n\nFOO=bar\nQUOTED="q u"\nNOEQ\nOPENROUTER_API_KEY=fromfile\n'
+            )
+            os.environ.pop("FOO", None)
+            os.environ.pop("QUOTED", None)
+            load_dotenv()
+            assert os.environ["FOO"] == "bar"
+            assert os.environ["QUOTED"] == "q u"  # surrounding quotes stripped
+            assert "NOEQ" not in os.environ  # no '=' -> skipped
+            assert os.environ["OPENROUTER_API_KEY"] == "test-key"  # env wins over .env
+        finally:
+            os.chdir(cwd)
+    print("config self-check ok")

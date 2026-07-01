@@ -14,13 +14,13 @@ The only actor is the User. The candidate runs the CLI to parse a resume, search
 
 YAHR itself reaches out to two external systems. It calls OpenRouter, an LLM gateway with an OpenAI-compatible API, whenever it has to reason over the resume or the jobs, over HTTPS as JSON. It calls the Adzuna job board API for the open listings themselves, also over HTTPS. OpenRouter covers all the model reasoning; Adzuna is where the actual postings come from. How that work is divided inside YAHR is what the rest of the Design section covers.
 
-![System Context](image/LikeC4-Index.png)
+![System Context](../image/LikeC4-Index.png)
 
 ### Container Diagram
 
 Inside YAHR the work splits into a handful of containers. The candidate starts only the CLI; every other container is a server reached over the network, except the orchestrator, which runs in-process inside the CLI rather than on a port of its own yet.
 
-![Containers](image/LikeC4-Containers.png)
+![Containers](../image/LikeC4-Containers.png)
 
 The orchestrator is the hub of the system. It fans out to three A2A agents, each its own server on its own port: the Job Searcher, the Ranker, and the CV Assistant. It also calls OpenRouter, the external LLM gateway, to pick which agent should handle each query.
 
@@ -36,7 +36,7 @@ The two MCP servers are deliberately outside the agent roster. They are MCP serv
 
 The CLI is a Typer application that renders with Rich, and it exposes four commands. `convert` turns a resume PDF into the Markdown profile: markitdown extracts the raw text, then one LLM pass repairs the reading order and applies Markdown structure. `serve` runs one server until interrupted, either an A2A agent (`job-searcher`, `ranker`, `cv-assistant`) or a job-provider MCP server (`adzuna-mcp`, `mock-mcp`). `start` is the main command: given a query it answers once and exits, and with no query it opens a chat REPL. `hello` just checks that the CLI is installed.
 
-![CLI](image/LikeC4-CLI-Interface.png)
+![CLI](../image/LikeC4-CLI-Interface.png)
 
 The orchestrator runs in-process inside `start`. For each request, `start` reads the resume file if it is there, passes the query and resume to the orchestrator, and renders what streams back: found jobs as boxed cards, any other agent reply as Markdown, and the intermediate status lines as the agent works. In the REPL those caches carry across turns, so a search, a "which of these fits me?" question, and a "what should I fix for the Acme role?" question become one conversation instead of three from-scratch runs.
 
@@ -48,7 +48,7 @@ The Job Searcher turns a natural-language query into a list of open positions. I
 
 The search is a goal-seeking loop, not a single call. It fetches jobs for the query, dedupes them by id into a running set, and checks whether it has enough. If not, it broadens the query and searches again. Broadening is LLM-first: the model offers a synonym, an adjacent title, or a wider location within the same country, while keeping the constraints the candidate stated. If the model is unreachable or returns junk, a deterministic fallback drops one qualifier (such as "senior") or the trailing word, so the loop always moves forward. It stops on the first of three conditions: it has as many jobs as the query asked for (a "find 3 jobs" count, or a default of five), the query can no longer be broadened and has converged, or it hits its budget of search rounds and fetch calls. The budget exists because the real provider is a paid, rate-limited API.
 
-![Job Searcher](image/LikeC4-Job-Searcher-Components.png)
+![Job Searcher](../image/LikeC4-Job-Searcher-Components.png)
 
 The result leaves the agent in two forms. The structured jobs go out as the `jobs` artifact. The same jobs, rendered as Markdown, are the readable result the CLI shows and the Ranker later reads.
 
@@ -56,7 +56,7 @@ The result leaves the agent in two forms. The structured jobs go out as the `job
 
 The Ranker scores the found jobs against the resume and answers the candidate's question in a single LLM call. The orchestrator bundles three things into that call: the question, the jobs, and the resume. The prompt fixes the Fit rubric so the scoring stays consistent: each job gets a score from 0 to 100, the list is ranked best first, and ties break by the order the jobs arrived in, never at random. The Ranker judges only from the text it is given, so a requirement the resume does not mention counts as not met rather than a guess.
 
-![Ranker](image/LikeC4-Ranker-Component.png)
+![Ranker](../image/LikeC4-Ranker-Component.png)
 
 #### CV Assistant Agent
 
@@ -64,7 +64,7 @@ The CV Assistant takes one job the candidate names and reports how to strengthen
 
 Each gap is marked REWORD, when the resume already states the fact and only needs better wording, or ACQUIRE, when it is genuinely missing. The agent stays advisory: it may flag skills the resume lacks, but it never rewrites the resume, and it credits the candidate with a strength only when that fact is actually written in the resume.
 
-![CV Assistant](image/LikeC4-CV-Assistant-Component.png)
+![CV Assistant](../image/LikeC4-CV-Assistant-Component.png)
 
 #### Adzuna MCP Server
 
@@ -72,7 +72,7 @@ The Adzuna MCP server is the one place that talks to the real job board. It expo
 
 Four modules split the work, and only two of them reach off the machine. The MCP Server (`server.py`) is thin wiring: it advertises the `search` tool and assembles the result, delegating everything else. The Adzuna Client (`client.py`) is the only module that calls the job board, fetching one `/search` page over HTTPS with credentials read from the environment and mapping the response into Jobs, skipping any entry missing the id it needs to dedupe or the title it needs to show. The Query Extractor (`extract.py`) turns the candidate's natural-language query into Adzuna's whitelisted search fields with an LLM pass, falling back to the whole query as the plain `what` term when the model is unreachable or returns nothing usable. The Enricher (`enrich.py`) exists because Adzuna's search results carry only a truncated description: it fetches each posting's own page and runs an LLM pass to trim it down to just the job description.
 
-![Adzuna MCP Server](image/LikeC4-MCP-Adzuna-Components.png)
+![Adzuna MCP Server](../image/LikeC4-MCP-Adzuna-Components.png)
 
 Both LLM steps lean on OpenRouter, the same gateway the agents use, and both are best effort by design. If the extractor's model call fails the search still runs on the raw query, and if a posting page cannot be fetched or trimmed the job keeps its truncated description rather than dropping out. This keeps the credentials and the paid API entirely behind the MCP boundary: the Job Searcher, and everything above it, only ever see the provider-agnostic `search` tool.
 
@@ -84,16 +84,16 @@ The three commands the candidate runs all follow the same skeleton: the CLI hand
 
 A plain search starts fresh. The CLI calls `start` with the query, attaching `output/resume.md` if it is there. The orchestrator first fetches every agent's card in parallel to learn who is up, then asks OpenRouter which agent fits and, for a search, gets the Job Searcher. It forwards the query over a streaming A2A call; the Job Searcher runs its `search(query)` MCP tool against the Adzuna server, which searches and fetches listing pages over HTTPS. The found jobs come back as an A2A artifact, and the orchestrator streams the status lines and then renders the job cards in the terminal. This run is what fills the jobs cache the next two flows reuse.
 
-![Job Searcher Flow](image/LikeC4-Ask-Pipeline-Flow.png)
+![Job Searcher Flow](../image/LikeC4-Ask-Pipeline-Flow.png)
 
 #### Ranking Flow
 
 A ranking query reuses what the search already found. The CLI sends "which job fits me?" with the resume, and the orchestrator routes it to the Ranker. Rather than search again, it reads the jobs it cached on the earlier `start` run, calling the Job Searcher here only when the cache is empty. It then bundles the question, those jobs, and the resume into one A2A message to the Ranker, which scores and ranks them against the resume in a single seeded LLM call. The ranked jobs and the written answer stream back and render as Markdown.
 
-![Ranker Flow](image/LikeC4-Jobs-Ranking-Flow.png)
+![Ranker Flow](../image/LikeC4-Jobs-Ranking-Flow.png)
 
 #### Improve Flow
 
 The resume-improvement query has the same shape, with the CV Assistant in the Ranker's place. The CLI sends "improve my resume for &lt;job&gt;" with the resume, and the orchestrator routes to the CV Assistant, again reusing the cached jobs and searching first only if the cache is empty. It bundles the request, the jobs, and the resume, and the CV Assistant makes one seeded LLM call that picks the single named job, compares it against the resume, and emits a Gaps section (each gap marked REWORD or ACQUIRE) and a Suggestions section. There is no automatic rewrite loop: the advice streams back as Markdown and the candidate makes the edits.
 
-![Improve Flow](image/LikeC4-Improve-Resume-Flow.png)
+![Improve Flow](../image/LikeC4-Improve-Resume-Flow.png)

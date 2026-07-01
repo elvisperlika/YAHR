@@ -1,0 +1,54 @@
+.docname {YAHR}
+.doctype {paged}
+.doclang {English}
+.theme {paperwhite} layout:{latex}
+
+.docauthors
+  - elvis-perlika
+
+.pagemargin {bottomcenter}
+    .currentpage
+
+.pageformat margin:{4cm}
+
+.center
+
+    #! YAHR
+
+    ![YAHR](image/logo.png)
+
+    Elvis Perlika
+
+    elvis.perlika@studio.unibo.it
+
+    Intelligent System Engineering
+    
+    University of Bologna
+
+    2026
+
+.pagebreak 
+
+.tableofcontents
+
+# YAHR
+
+.includeall 
+    - ./_includes/abstract.md
+
+    - ./_includes/domain.md
+
+    - ./_includes/core-concepts.md
+
+    - ./_includes/design.md
+
+    - ./_includes/tech-stack.md
+
+    - ./_includes/code.md
+
+    - ./_includes/testing.md
+
+    - ./_includes/deployment.md
+
+    - ./_includes/conclusion.md
+
