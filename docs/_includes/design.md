@@ -1,0 +1,81 @@
+## Design
+
+YAHR is built on A2A (Agent-to-Agent), an open protocol that lets independent agents talk to each other over HTTP. The work is split across one orchestrator and three specialized agents, each running as its own A2A server on its own port and doing a single job. The orchestrator sits in front of all three, routing each request to the agent that fits and streaming the result back to the terminal.
+
+The agents know nothing about each other or about the orchestrator. An agent answers A2A requests and returns a result, and that is all. This is what keeps the system loosely coupled. A new agent comes online by starting its server and serving an agent card, and the orchestrator finds it the next time it looks; nothing else has to change. The job boards sit one layer further out, behind MCP (Model Context Protocol), which keeps the job providers swappable too.
+
+Two choices run through every agent. The first is that each agent keeps its protocol layer apart from its work: a thin executor drives the A2A task while a protocol-free core does the actual searching, scoring, or analysis. No A2A type reaches the core, so the core runs and can be checked offline without a server. The second is that the agents that reason over the resume, the Ranker and the CV Assistant, are pinned to greedy, seeded sampling (temperature 0 and a fixed seed) so the same input produces the same output from one run to the next. The orchestrator's routing call is pinned the same way, so a given query routes to the same agent every time. This determinism is best effort: it holds only as far as the model provider honors the seed.
+
+### System Context
+
+At its outermost level YAHR is one system the candidate runs locally, and it depends on two outside services.
+
+The only actor is the User. The candidate runs the CLI to parse a resume, search for matching jobs, and get suggestions for improving it, and every result comes back through that one program on their own machine.
+
+YAHR itself reaches out to two external systems. It calls OpenRouter, an LLM gateway with an OpenAI-compatible API, whenever it has to reason over the resume or the jobs, over HTTPS as JSON. It calls the Adzuna job board API for the open listings themselves, also over HTTPS. OpenRouter covers all the model reasoning; Adzuna is where the actual postings come from. How that work is divided inside YAHR is what the rest of the Design section covers.
+
+![System Context](image/LikeC4-Index.png)
+
+### Container Diagram
+
+Inside YAHR the work splits into a handful of containers. The candidate starts only the CLI; every other container is a server reached over the network, except the orchestrator, which runs in-process inside the CLI rather than on a port of its own yet.
+
+![Containers](image/LikeC4-Containers.png)
+
+The orchestrator is the hub of the system. It fans out to three A2A agents, each its own server on its own port: the Job Searcher, the Ranker, and the CV Assistant. It also calls OpenRouter, the external LLM gateway, to pick which agent should handle each query.
+
+OpenRouter is the LLM gateway used for every reasoning step.
+
+The three agents differ in how far they reach. The Ranker and the CV Assistant are self-contained: each answers the orchestrator by calling OpenRouter, and touches nothing else. The Job Searcher is the only agent that goes after job listings, and it does so as an MCP client rather than calling a board directly. Behind it sit two MCP job servers that expose the same search tool, the Adzuna server and the offline mock, and only the Adzuna server reaches the external job board API.
+
+One container is data rather than a process: the jobs artifact. The Job Searcher produces it as the structured output of its A2A task, and the orchestrator receives it, passes it to the CLI to render, and keeps it so the Ranker and the CV Assistant can reuse it without a fresh search.
+
+The two MCP servers are deliberately outside the agent roster. They are MCP servers, not A2A agents, so the orchestrator never discovers them and never routes a query to them; the Job Searcher is the only thing that reaches them.
+
+#### CLI Architecture
+
+The CLI is a Typer application that renders with Rich, and it exposes four commands. `convert` turns a resume PDF into the Markdown profile: markitdown extracts the raw text, then one LLM pass repairs the reading order and applies Markdown structure. `serve` runs one server until interrupted, either an A2A agent (`job-searcher`, `ranker`, `cv-assistant`) or a job-provider MCP server (`adzuna-mcp`, `mock-mcp`). `start` is the main command: given a query it answers once and exits, and with no query it opens a chat REPL. `hello` just checks that the CLI is installed.
+
+![CLI](image/LikeC4-CLI-Interface.png)
+
+The orchestrator runs in-process inside `start`; a standalone one on its own port is planned but not yet built, and its port is already reserved. For each request, `start` reads the resume file if it is there, passes the query and resume to the orchestrator, and renders what streams back: found jobs as boxed cards, any other agent reply as Markdown, and the intermediate status lines as the agent works. In the REPL those caches carry across turns, so a search, a "which of these fits me?" question, and a "what should I fix for the Acme role?" question become one conversation instead of three from-scratch runs.
+
+Agent names and addresses live in one place, the roster, and both the running servers and the orchestrator's discovery list derive from it. A name or a port cannot drift between the agent that advertises it and the orchestrator that looks for it.
+
+#### Job Searcher Agent
+
+The Job Searcher turns a natural-language query into a list of open positions. It never calls a job board directly. It connects to whatever MCP server its configured URL points at and calls that server's generic `search` tool, so Adzuna, the bundled mock, or any future source is just a different URL.
+
+The search is a goal-seeking loop, not a single call. It fetches jobs for the query, dedupes them by id into a running set, and checks whether it has enough. If not, it broadens the query and searches again. Broadening is LLM-first: the model offers a synonym, an adjacent title, or a wider location within the same country, while keeping the constraints the candidate stated. If the model is unreachable or returns junk, a deterministic fallback drops one qualifier (such as "senior") or the trailing word, so the loop always moves forward. It stops on the first of three conditions: it has as many jobs as the query asked for (a "find 3 jobs" count, or a default of five), the query can no longer be broadened and has converged, or it hits its budget of search rounds and fetch calls. The budget exists because the real provider is a paid, rate-limited API.
+
+![Job Searcher](image/LikeC4-Job-Searcher-Components.png)
+
+The result leaves the agent in two forms. The structured jobs go out as the `jobs` artifact. The same jobs, rendered as Markdown, are the readable result the CLI shows and the Ranker later reads.
+
+#### Ranker Agent
+
+The Ranker scores the found jobs against the resume and answers the candidate's question in a single LLM call. The orchestrator bundles three things into that call: the question, the jobs, and the resume. The prompt fixes the Fit rubric so the scoring stays consistent: each job gets a score from 0 to 100, the list is ranked best first, and ties break by the order the jobs arrived in, never at random. The Ranker judges only from the text it is given, so a requirement the resume does not mention counts as not met rather than a guess.
+
+#### CV Assistant Agent
+
+The CV Assistant takes one job the candidate names and reports how to strengthen the resume for it. As with the Ranker, it works from a bundle of the request, the jobs, and the resume in a single LLM call. It first picks the single target job by matching the title or company in the request against the postings, and falls back to the first posting when the request names none. Then it writes two sections: a Gaps section listing what the posting asks for that the resume does not clearly show, and a Suggestions section of concrete edits.
+
+Each gap is marked REWORD, when the resume already states the fact and only needs better wording, or ACQUIRE, when it is genuinely missing. The agent stays advisory: it may flag skills the resume lacks, but it never rewrites the resume, and it credits the candidate with a strength only when that fact is actually written in the resume.
+
+### Ranking Query Walkthrough
+
+A ranking query pulls the pieces together. Say the candidate has already converted a resume and run a search, and now asks which of the jobs fits best:
+
+1. CLI → Orchestrator: the query, with the resume read from `output/resume.md`.
+2. Orchestrator → OpenRouter: a seeded routing call asking which agent fits. It names the Ranker.
+3. Orchestrator: load the jobs from the cache the earlier search left, and call the Job Searcher first only if the cache is empty.
+4. Orchestrator → Ranker: one A2A message bundling the question, those jobs, and the resume.
+5. Ranker → OpenRouter: a single seeded call that scores each job against the resume and writes the ranked answer, while a `working` status streams back.
+6. Ranker → Orchestrator: the task reaches `completed` with the ranked list and the answer.
+7. Orchestrator → CLI: the result streams up and renders as Markdown.
+
+![Rank Flow](image/Rank%20Flow%20from%20LikeC4.jpg)
+
+The resume-improvement flow has the same shape. The router picks the CV Assistant instead, and the bundled call comes back with gaps and suggestions rather than a ranking.
+
+![Improve Flow](image/Improve%20Flow%20from%20LikeC4.jpg)
