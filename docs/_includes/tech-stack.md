@@ -1,6 +1,6 @@
 ## Tech Stack
 
-YAHR is written in Python and needs version 3.14 or newer. The command-line front end uses Typer, which turns the command functions into the `yahr` program, and Rich, which draws the status spinner, the job cards, and the Markdown replies in the terminal. Hatchling builds the package, so `pip install -e .` puts `yahr` on the path.
+YAHR is written in Python and needs version 3.14 or newer. The command-line front end uses two libraries. Typer turns the command functions into the `yahr` program, and Rich draws the status spinner, the job cards, and the Markdown replies in the terminal. Hatchling builds the package, so `pip install -e .` puts `yahr` on the path.
 
 The two protocols each come from a reference SDK. A2A runs on `a2a-sdk`, with its `http-server` extra: the orchestrator talks to agents through the SDK's client, and each agent is an ASGI app that uvicorn serves over HTTP. MCP comes from the `mcp` package: the job-provider servers are built on its FastMCP helper, and the Job Searcher reaches them with the same package's client over streamable HTTP.
 
@@ -10,9 +10,9 @@ The Python is formatted and linted with ruff, and everything else (these docs in
 
 ### A2A Protocol
 
-A2A gives YAHR three things it would otherwise have to build: a way to discover an agent and read its capabilities, one uniform shape for giving work to any agent and reading the result, and a streaming channel for following that work while it runs. YAHR uses a subset of the protocol through the Python `a2a-sdk`.
+A2A saves YAHR from building three things itself. It can discover an agent and read its capabilities, hand work to any agent and read the result through one uniform shape, and follow that work over a streaming channel while it runs. YAHR uses a subset of the protocol through the Python `a2a-sdk`.
 
-Every agent publishes an Agent Card, a small JSON document that states its identity (`name`, `description`, `version`), its service `url`, the `capabilities` it supports (streaming among them), the media types it accepts, and a list of `skills`. The card is the unit of discovery and capability negotiation, the thing a client reads before it sends anything. A2A allows three ways to find one: a well-known URI (`https://{host}/.well-known/agent-card.json`, following RFC 8615), a curated registry, or direct configuration. YAHR combines the last two. The roster is the direct configuration, a fixed list of host and port pairs, and the orchestrator resolves the card at each one's well-known URI. Nothing about an agent is hard-coded into the orchestrator: the description and skills it routes on come off the live card.
+Every agent publishes an Agent Card. It is a small JSON document that states the agent's identity (`name`, `description`, `version`), its service `url`, the `capabilities` it supports (streaming among them), the media types it accepts, and a list of `skills`. A client reads the card before it sends anything, so the card is where discovery and capability negotiation happen. A2A allows three ways to find one: a well-known URI (`https://{host}/.well-known/agent-card.json`, following RFC 8615), a curated registry, or direct configuration. YAHR combines the last two. The roster is the direct configuration, a fixed list of host and port pairs, and the orchestrator resolves the card at each one's well-known URI. Nothing about an agent is hard-coded into the orchestrator: the description and skills it routes on come off the live card.
 
 A2A defines three transport bindings: JSON-RPC 2.0, gRPC, and HTTP with JSON (REST). An agent may offer any of them, and its card's `url` says where to reach it. YAHR's agents speak JSON-RPC 2.0 over HTTP, and the orchestrator's client speaks the same binding.
 

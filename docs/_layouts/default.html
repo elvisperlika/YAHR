@@ -152,6 +152,14 @@
           color 0.18s,
           transform 0.18s;
       }
+      .index a.sub {
+        padding-left: 1.9em;
+        font-size: 0.66rem;
+        text-transform: none;
+        letter-spacing: 0.02em;
+        padding-top: 0.26rem;
+        padding-bottom: 0.26rem;
+      }
       .index a .n {
         color: var(--accent);
         font-variant-numeric: tabular-nums;
@@ -460,11 +468,12 @@
       );
       if (lead) lead.classList.add("lead");
 
-      // 3) Build the margin index from the remaining (numbered) sections.
+      // 3) Build the margin index from the sections (h2) and subsections (h3).
       const nav = document.getElementById("index-nav");
-      const heads = [...content.querySelectorAll("h2")];
+      const heads = [...content.querySelectorAll("h2, h3")];
       const links = [];
-      heads.forEach((h, i) => {
+      let sec = 0;
+      heads.forEach((h) => {
         if (!h.id)
           h.id =
             "sec-" +
@@ -472,11 +481,20 @@
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, "-")
               .replace(/(^-|-$)/g, "");
-        const n = String(i + 1).padStart(2, "0");
         const a = document.createElement("a");
         a.href = "#" + h.id;
-        a.innerHTML =
-          '<span class="n">' + n + "</span><span>" + h.textContent + "</span>";
+        if (h.tagName === "H3") {
+          a.className = "sub";
+          a.innerHTML = "<span>" + h.textContent + "</span>";
+        } else {
+          const n = String(++sec).padStart(2, "0");
+          a.innerHTML =
+            '<span class="n">' +
+            n +
+            "</span><span>" +
+            h.textContent +
+            "</span>";
+        }
         nav.appendChild(a);
         links.push(a);
       });
