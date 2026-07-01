@@ -444,9 +444,8 @@
       const content = document.querySelector(".content");
 
       // 1) Lift the title block (everything before the first section) into a hero.
-      const h1s = content.querySelectorAll("h1");
-      if (h1s.length > 1) {
-        const firstSection = h1s[1];
+      const firstSection = content.querySelector("h2");
+      if (firstSection) {
         const hero = document.createElement("header");
         hero.className = "hero";
         while (content.firstChild && content.firstChild !== firstSection) {
@@ -463,7 +462,7 @@
 
       // 3) Build the margin index from the remaining (numbered) sections.
       const nav = document.getElementById("index-nav");
-      const heads = [...content.querySelectorAll("h1")];
+      const heads = [...content.querySelectorAll("h2")];
       const links = [];
       heads.forEach((h, i) => {
         if (!h.id)
